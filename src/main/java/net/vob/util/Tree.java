@@ -254,11 +254,14 @@ public interface Tree<E, T extends Tree<? extends E, ? extends T>> {
     
     /**
      * Maps this tree on a per-node basis to an equivalent tree. Implementations
-     * should ensure 
+     * should ensure that the returned tree has the same structure as this tree;
+     * additionally, for each node {@code n} in this tree, the equivalent node in
+     * the returned tree holds the value {@code mapper.apply(n.getValue())}.
      * 
-     * @param <R>
-     * @param mapper
-     * @return 
+     * @param <R> the type of values the mapper maps to
+     * @param mapper the mapping function
+     * @return a new {@code Tree} with the same structure as this tree and with
+     * each node's value being the mapped value of the equivalent node in this tree
      */
     <R> Tree<? extends R, ?> map(Function<? super E, ? extends R> mapper);
     

@@ -25,9 +25,10 @@ import net.vob.util.logging.LocaleUtils;
  * minimize the effort required to implement this interface.<p>
  * 
  * To implement an unmodifiable tree, the programmer needs only to extend this class and
- * provide implementations for {@link getValue()}, {@link parent()} and
- * {@link childLikeWalk()}; the child-like walk iterator should <i>not</i> have an
- * implementation of {@code remove} if the tree is to be unmodifiable.<p>
+ * provide implementations for {@link getValue()}, {@link parent()},
+ * {@link map(Function)} and {@link childLikeWalk()}; the child-like walk iterator
+ * should <i>not</i> have an implementation of {@code remove} if the tree is to be
+ * unmodifiable.<p>
  * 
  * To implement a tree that can have elements added to it, the programmer must
  * additionally override {@link doSetValue(Object)}, {@link doAddChild(Object)} and

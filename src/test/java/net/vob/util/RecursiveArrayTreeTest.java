@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Spliterator;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.AfterAll;
@@ -515,6 +516,11 @@ public class RecursiveArrayTreeTest {
 
         @Override
         public AbstractTree<? extends Integer> parent() {
+            return null;
+        }
+
+        @Override
+        public <R> Tree<? extends R, ?> map(Function<? super Integer, ? extends R> mapper) {
             return null;
         }
         

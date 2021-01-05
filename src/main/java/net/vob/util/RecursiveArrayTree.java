@@ -190,10 +190,10 @@ public class RecursiveArrayTree<E> extends AbstractTree<E> {
     }
     
     @Override
-    public <R> RecursiveArrayTree<R> map(Function<? super E, R> mapper) {
+    public <R> RecursiveArrayTree<R> map(Function<? super E, ? extends R> mapper) {
         RecursiveArrayTree<R> root = new RecursiveArrayTree<>(mapper.apply(value));
         
-        Iterator<? extends AbstractTree<? extends E>> it = childLikeWalk();
+        Iterator<RecursiveArrayTree<E>> it = childLikeWalk();
         while (it.hasNext())
             root.add(it.next().map(mapper));
         
