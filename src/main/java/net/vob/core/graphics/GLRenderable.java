@@ -10,6 +10,7 @@ import net.vob.util.math.AffineTransformationImpl;
 import net.vob.util.math.Matrix;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL15;
+import org.lwjgl.opengl.GL43;
 
 /**
  * Container class for a mesh, array of textures, an affine transform, and a reference
@@ -29,6 +30,8 @@ import org.lwjgl.opengl.GL15;
  */
 final class GLRenderable extends Closable {
     static final Registry<GLRenderable> REGISTRY = new Registry<>();
+    
+    private static int skeletonSSBO, weightSSBO;
     
     Tree<AffineTransformation, ?> skeleton = null;
     Matrix weights = null;
@@ -75,6 +78,24 @@ final class GLRenderable extends Closable {
         mesh = r.mesh;
         for (int i = 0; i < textures.length; ++i)
             textures[i] = r.textures[i];
+    }
+    
+    private void updateSkeletonBuffers() {
+        GL15.glBindBuffer(GL43.GL_SHADER_STORAGE_BUFFER, 0);
+        GL15.glDeleteBuffers(skeletonSSBO);
+        GL15.glDeleteBuffers(weightSSBO);
+        
+        skeletonSSBO = GL15.glGenBuffers();
+        GL15.glBindBuffer(GL43.GL_SHADER_STORAGE_BUFFER, skeletonSSBO);
+        
+        
+        
+        GL15.glBindBuffer(GL43.GL_SHADER_STORAGE_BUFFER, 0);
+        
+        weightSSBO = GL15.glGenBuffers();
+        GL15.glBindBuffer(GL43.GL_SHADER_STORAGE_BUFFER, weightSSBO);
+        
+        GL15.glBindBuffer(GL43.GL_SHADER_STORAGE_BUFFER, 0);
     }
     
     /**
@@ -253,6 +274,10 @@ final class GLRenderable extends Closable {
     protected boolean doClose() {
         GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, 0);
         GL15.glDeleteBuffers(ivbo);
+        
+        GL15.glBindBuffer(GL43.GL_SHADER_STORAGE_BUFFER, 0);
+        GL15.glDeleteBuffers(skeletonSSBO);
+        GL15.glDeleteBuffers(weightSSBO);
         
         return true;
     }

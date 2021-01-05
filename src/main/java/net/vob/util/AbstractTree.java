@@ -4,7 +4,6 @@ import com.google.common.collect.Iterators;
 import java.util.ArrayDeque;
 import java.util.Collection;
 import java.util.ConcurrentModificationException;
-import java.util.Deque;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
@@ -17,6 +16,7 @@ import java.util.Stack;
 import java.util.function.BiFunction;
 import java.util.function.BinaryOperator;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import net.vob.util.logging.LocaleUtils;
 

@@ -7,6 +7,7 @@ import java.util.Spliterator;
 import java.util.function.BiFunction;
 import java.util.function.BinaryOperator;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Predicate;
 
 /**
@@ -250,6 +251,16 @@ public interface Tree<E, T extends Tree<? extends E, ? extends T>> {
      * @throws NullPointerException if the specified action is null
      */
     void forEach(Consumer<? super T> action);
+    
+    /**
+     * Maps this tree on a per-node basis to an equivalent tree. Implementations
+     * should ensure 
+     * 
+     * @param <R>
+     * @param mapper
+     * @return 
+     */
+    <R> Tree<? extends R, ?> map(Function<? super E, ? extends R> mapper);
     
     /**
      * Returns a breadth-first iterator over the nodes of this tree. This is

@@ -1,6 +1,7 @@
 package net.vob.util;
 
 import java.util.Iterator;
+import java.util.function.Function;
 
 /**
  * The simplest type of {@code Tree}. An instance of this class contains the node
@@ -186,6 +187,17 @@ public class RecursiveArrayTree<E> extends AbstractTree<E> {
         RecursiveArrayTree<E> child = children[index];
         removeChild(index);
         return child;
+    }
+    
+    @Override
+    public <R> RecursiveArrayTree<R> map(Function<? super E, R> mapper) {
+        RecursiveArrayTree<R> root = new RecursiveArrayTree<>(mapper.apply(value));
+        
+        Iterator<? extends AbstractTree<? extends E>> it = childLikeWalk();
+        while (it.hasNext())
+            root.add(it.next().map(mapper));
+        
+        return root;
     }
     
     @Override
