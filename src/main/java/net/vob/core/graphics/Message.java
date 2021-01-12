@@ -3,8 +3,10 @@ package net.vob.core.graphics;
 import java.awt.image.BufferedImage;
 import java.util.concurrent.CompletableFuture;
 import net.vob.util.Identity;
+import net.vob.util.Tree;
 import net.vob.util.math.AffineTransformation;
 import net.vob.util.math.AffineTransformationImpl;
+import net.vob.util.math.Matrix;
 import net.vob.util.math.Vector3;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
@@ -30,6 +32,8 @@ final class Message {
     void handle() throws Throwable {
         AffineTransformation AFFINE_TRANSFORMATION;
         AffineTransformation[] AFFINE_TRANSFORMATION_ARR;
+        Tree<AffineTransformation, ?> AFFINE_TRANSFORMATION_TREE;
+        Matrix MATRIX;
         WindowOptions WINDOW_OPTIONS;
         Identity IDENTITY_0, IDENTITY_1, IDENTITY_2, IDENTITY_3, IDENTITY_4, IDENTITY_5;
         BufferedImage BUFFERED_IMAGE_0, BUFFERED_IMAGE_1, BUFFERED_IMAGE_2, BUFFERED_IMAGE_3, BUFFERED_IMAGE_4, BUFFERED_IMAGE_5;
@@ -576,6 +580,28 @@ final class Message {
                     GraphicsManager.SELECTED_RENDERABLE.instanceTransforms[INT] = AFFINE_TRANSFORMATION.getAsUnmodifiable(true);
                 break;
                 
+            case RENDERABLE_SET_SKELETON:
+                AFFINE_TRANSFORMATION_TREE = (Tree<AffineTransformation, ?>)args[0];
+                MATRIX = (Matrix)args[1];
+                
+                if (GraphicsManager.SELECTED_RENDERABLE == null || AFFINE_TRANSFORMATION_TREE == null || MATRIX == null)
+                    o = null;
+                else {
+                    GraphicsManager.SELECTED_RENDERABLE.skeleton = AFFINE_TRANSFORMATION_TREE;
+                    GraphicsManager.SELECTED_RENDERABLE.weights = new Matrix(MATRIX);
+                    GraphicsManager.SELECTED_RENDERABLE.weights.readonly();
+                }
+                break;
+                
+            case RENDERABLE_REMOVE_SKELETON:
+                if (GraphicsManager.SELECTED_RENDERABLE == null)
+                    o = null;
+                else {
+                    GraphicsManager.SELECTED_RENDERABLE.skeleton = null;
+                    GraphicsManager.SELECTED_RENDERABLE.weights = null;
+                }
+                break;
+                
             case RENDERABLE_SELECT_MESH:
                 if (GraphicsManager.SELECTED_RENDERABLE == null)
                     o = null;
@@ -702,6 +728,7 @@ final class Message {
         RENDERABLE_ATTACH_TEXTURE, RENDERABLE_DETACH_TEXTURE,
         RENDERABLE_DETACH_TEXTURE_UNIT, RENDERABLE_SET_INSTANCES,
         RENDERABLE_SET_INSTANCE_TRANSFORMS, RENDERABLE_SET_INSTANCE_TRANSFORM,
+        RENDERABLE_SET_SKELETON, RENDERABLE_REMOVE_SKELETON,
         RENDERABLE_SELECT_MESH, RENDERABLE_SELECT_TEXTURE,
         RENDERABLE_SELECT_SHADER_PROGRAM, RENDERABLE_COPY, RENDERABLE_GET_ID,
         

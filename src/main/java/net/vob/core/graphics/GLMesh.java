@@ -257,6 +257,14 @@ final class GLMesh extends GLObject {
     }
     
     /**
+     * Gets the number of vertices in this mesh.
+     * @return 
+     */
+    final int getNumVertices() {
+        return positions.length;
+    }
+    
+    /**
      * Sets the positions of the vertices of this mesh.
      * @param positions the new array of vertex positions
      * @throws IllegalStateException if the mesh is closed or read-only

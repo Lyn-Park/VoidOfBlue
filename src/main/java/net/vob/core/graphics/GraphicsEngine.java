@@ -18,6 +18,9 @@ import net.vob.util.logging.LocaleUtils;
 import net.vob.util.math.AffineTransformation;
 import net.vob.core.ui.InputManager;
 import net.vob.util.Input;
+import net.vob.util.Tree;
+import net.vob.util.Trees;
+import net.vob.util.math.Matrix;
 
 import static org.lwjgl.glfw.GLFW.*;
 
@@ -2113,6 +2116,14 @@ public final class GraphicsEngine {
      */
     public static CompletableFuture<Integer> msgRenderableSetInstanceTransform(AffineTransformation transform, int instance) {
         return enqueueMessage(new Message(Message.Type.RENDERABLE_SET_INSTANCE_TRANSFORM, transform.getAsUnmodifiable(true), instance));
+    }
+    
+    public static CompletableFuture<Integer> msgRenderableSetSkeleton(Tree<AffineTransformation, ?> skeleton, Matrix weights) {
+        return enqueueMessage(new Message(Message.Type.RENDERABLE_SET_SKELETON, Trees.unmodifiableTree(skeleton), weights));
+    }
+    
+    public static CompletableFuture<Integer> msgRenderableRemoveSkeleton() {
+        return enqueueMessage(new Message(Message.Type.RENDERABLE_REMOVE_SKELETON));
     }
     
     /**

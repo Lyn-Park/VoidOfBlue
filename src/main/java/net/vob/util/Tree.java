@@ -2,28 +2,26 @@ package net.vob.util;
 
 import java.util.Collection;
 import java.util.Iterator;
-import java.util.Optional;
 import java.util.Spliterator;
-import java.util.function.BiFunction;
-import java.util.function.BinaryOperator;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
 /**
- * Trees are a collection of <i>nodes</i>, each with at maximum one <i>parent</i> node
- * and any number of <i>child</i> nodes. Any class that implements this interface has
- * complete control over how these nodes are implemented, what they represent, how they
- * can be traversed, and whether they are sorted.<p>
+ * Trees are a non-empty collection of <i>nodes</i>, each with at maximum one
+ * <i>parent</i> node and any number of <i>child</i> nodes. Any class that implements
+ * this interface has complete control over how these nodes are implemented, what they
+ * represent, how they can be traversed, any limitations on their usage, and whether
+ * they are sorted.<p>
  * 
  * This interface provides a number of method signatures for basic traversal and
  * iteration over the elements of the tree; notably, traversing up/down the tree will
  * return another tree, with either the parent or the child node as the new tree's
  * root node.<p>
  * 
- * Trees are similar to lists in that they may typically contain duplicate elements,
- * as enforced by the {@link Object#equals(Object) equals(..)} method. It is possible
- * for users of this class to prohibit duplicates, however.<p>
+ * Trees may contain duplicate elements, as enforced by the
+ * {@link Object#equals(Object) equals(..)} method. It is possible for users of this
+ * class to prohibit duplicates, however.<p>
  * 
  * A tree can be traversed, in various ways. Such traversals are known as <i>walks</i>,
  * and each one has its own associated iterator that performs the walk. All trees must
@@ -35,15 +33,27 @@ import java.util.function.Predicate;
  * as well  as the ability to iterate from child to parent repeatedly up the tree until
  * the root node is located. Both of these have been termed here the <i>child-like
  * walk</i> and the <i>ancestral walk</i>, respectively. Neither of these non-standard
- * walks are expected to visit all nodes in the tree.
+ * walks are expected to visit all nodes in the tree.<p>
+ * 
+ * <b>Note:</b>
+ * This interface was created and expanded upon based on 2 invariants regarding tree
+ * structures:
+ * <ul>
+ *  <li>A collection of nodes is a tree <i>if-and-only-if</i> the collection has a
+ * dedicated <i>root node</i>.</li>
+ *  <li>All tree nodes have a single associated <i>value</i>.</li>
+ * </ul>
+ * These 2 invariants together mean that 'empty' trees do not exist, as they have no
+ * nodes and thus no root node; the closest to an empty tree that can be built
+ * contains precisely 1 value for the root node.
  * 
  * @param <E> the type of elements this {@code Tree} contains
  * @param <T> the type of the implementing class itself
  */
-public interface Tree<E, T extends Tree<? extends E, ? extends T>> {
+public interface Tree<E, T extends Tree<E, ? extends T>> {
     /**
      * Gets the size of the tree. This is defined as the total number of nodes that are,
-     * either directly or indirectly, descendants of this node (including the node
+     * either directly or indirectly, descendants of this node (including this node
      * itself).
      * 
      * @return the size of the tree
@@ -132,7 +142,31 @@ public interface Tree<E, T extends Tree<? extends E, ? extends T>> {
     /**
      * Adds a child to this node. The given value is the value of the new child node.
      * An implementation of this method must <i>also</i> handle setting the parent
-     * of the new child node.
+     * of the new child node.<p>
+     * 
+     * Trees that support this operation may place limitations on what elements may
+     * be added to this tree. In particular, some trees will refuse to add {@code null}
+     * elements, and others will impose restrictions on the type of elements that may
+     * be added.<p>
+     *
+     * If a tree refuses to add a particular element for any exceptional reason (e.g.
+     * attempting to add a duplicate value to a tree that disallows duplicates is
+     * <i>not</i> exceptional, but attempting to add an invalid type of value <i>is</i>
+     * exceptional), it <i>must</i> throw an exception (rather than returning
+     * {@code false}). This preserves the invariant that a tree always contains the
+     * specified element after this call returns.<p>
+     * 
+     * Trees that support this operation may add elements at any location within the
+     * tree, and can even alter other parts of the tree's structure; the only
+     * invariant this method must preserve is that the element will always be present
+     * <i>somewhere</i> within the tree immediately after returning. For example,
+     * sorted trees may insert the new value and then restructure the tree to abide by
+     * the imposed ordering.<p>
+     * 
+     * Tree classes should clearly specify the behaviour of this method within its
+     * documentation, including any limitations on the elements that can be added to the
+     * tree, where such elements will be placed, and any other modifications it will
+     * make to the tree structure.
      * 
      * @param value the new value of the child node
      * @return {@code true} if the value was successfully added as a child node
@@ -141,19 +175,53 @@ public interface Tree<E, T extends Tree<? extends E, ? extends T>> {
     boolean add(E value);
     
     /**
-     * Adds an entire child tree to this node, also known as 'grafting'. This simply
-     * treats the root node of the given tree as a child of this node. An
+     * Adds an entire child tree to this node, also known as 'grafting'. An
      * implementation of this method must <i>also</i> handle setting the parent of 
      * the child node, removing it from its current parent if necessary.<p>
      * 
+     * Trees that support this operation may place limitations on what subtrees may
+     * be added to this tree. In particular, some trees will refuse to add {@code null}
+     * elements, and others will impose restrictions on the type of elements that may
+     * be added, or perhaps on the structure of the subtrees.<p>
+     *
+     * If a tree refuses to add a particular tree for any exceptional reason (e.g.
+     * attempting to add a tree when it is already present is <i>not</i> exceptional,
+     * but attempting to add an invalid type of tree <i>is</i> exceptional), it
+     * <i>must</i> throw an exception (rather than returning {@code false}). This 
+     * preserves the invariant that a tree always contains the specified tree as a 
+     * descendent after this call returns.<p>
+     * 
+     * Trees that support this operation may add subtrees at any location within the
+     * tree, and can even alter other parts of the tree's structure; the only
+     * invariant this method must preserve is that the given tree will always be present
+     * <i>somewhere</i> within the tree immediately after returning (i.e. that the
+     * internal structure of the given subtree remains unchanged, even if the rest of
+     * this tree is changed).<p>
+     * 
+     * On the surface, it may seem that this method and {@link add(Object) add(value)}
+     * are identical save for the fact that this method takes a tree parameter;
+     * however, the behaviour of this method can differ wildly even if the parameters
+     * appear to be functionally similar. For instance, a sorted tree may take a value
+     * parameter through {@link add(Object) add(value)}, and add it to a specific area
+     * of the tree without issue. However, attempting to add a subtree to the sorted
+     * tree may cause the imposed ordering to be violated and thus require a
+     * restructuring of the entire tree, including the subtree; since this is likely to
+     * violate the invariant of this method that the given subtree remains unchanged,
+     * a sorted tree class may opt to not implement this method.<p>
+     * 
+     * Tree classes should clearly specify the behaviour of this method within its
+     * documentation, including any limitations on the elements that can be added to the
+     * tree, where subtrees will be placed, and any other modifications it will make to
+     * the tree structure.<p>
+     * 
      * Note that implementing classes should ensure that this method never causes
      * a cyclic reference by attempting to add an ancestor node as a child, as the
-     * data structure will cease to be a 'tree' in that case.
+     * data structure will cease to be a 'tree' in that case. Such an attempt should be
+     * handled as an exceptional reason for refusing to add the tree.
      * 
      * @param tree the child tree to add
      * @return {@code true} if the specified tree was successfully added as a child
      * to the tree, {@code false} otherwise
-     * @throws NullPointerException if the specified tree is null
      */
     boolean add(T tree);
     
@@ -231,7 +299,7 @@ public interface Tree<E, T extends Tree<? extends E, ? extends T>> {
      * 
      * @return the parent of this tree
      */
-    T parent();
+    T getParent();
     
     /**
      * Gets the root of this tree. This is defined as the unique ancestor of this 
@@ -256,14 +324,14 @@ public interface Tree<E, T extends Tree<? extends E, ? extends T>> {
      * Maps this tree on a per-node basis to an equivalent tree. Implementations
      * should ensure that the returned tree has the same structure as this tree;
      * additionally, for each node {@code n} in this tree, the equivalent node in
-     * the returned tree holds the value {@code mapper.apply(n.getValue())}.
+     * the returned tree should hold the value {@code mapper.apply(n.getValue())}.
      * 
      * @param <R> the type of values the mapper maps to
      * @param mapper the mapping function
      * @return a new {@code Tree} with the same structure as this tree and with
      * each node's value being the mapped value of the equivalent node in this tree
      */
-    <R> Tree<? extends R, ?> map(Function<? super E, ? extends R> mapper);
+    <R> Tree<R, ?> map(Function<? super E, R> mapper);
     
     /**
      * Returns a breadth-first iterator over the nodes of this tree. This is
@@ -314,8 +382,9 @@ public interface Tree<E, T extends Tree<? extends E, ? extends T>> {
     /**
      * Returns an iterator over the direct children of this tree.<p>
      * 
-     * This iterator should not visit all elements of the tree, as it should not
-     * visit this node nor any of its descendants beyond the direct children.
+     * This iterator should not visit all elements of the tree; specifically, it
+     * should not visit this node nor any of its descendants beyond the direct
+     * children.
      * 
      * @return an {@link Iterator} over the child nodes of this node of the tree
      */
@@ -327,8 +396,8 @@ public interface Tree<E, T extends Tree<? extends E, ? extends T>> {
      * recursively moves further up the tree until it finds and returns the root
      * node of the parent tree.<p>
      * 
-     * This iterator should not visit all elements of the tree, as it should not
-     * visit this node.
+     * This iterator should not visit all elements of the tree; specifically, it
+     * should not visit this node.
      * 
      * @return an {@link Iterator} over the ancestor nodes of this node of the
      * tree
@@ -340,7 +409,7 @@ public interface Tree<E, T extends Tree<? extends E, ? extends T>> {
      * 
      * The requirements imposed on both the implementation of this method and the
      * returned spliterator are similar to {@link Collection#spliterator()}. This
-     * extends to documenting the spliterator, its reported characteristics and,
+     * extends to documenting the spliterator, its reported characteristics, and
      * its policy on binding and concurrent structural interference.
      * 
      * @return the spliterator over the elements of the tree

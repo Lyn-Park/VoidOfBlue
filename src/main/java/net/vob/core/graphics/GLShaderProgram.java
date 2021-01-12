@@ -1,6 +1,7 @@
 package net.vob.core.graphics;
 
 import com.google.common.collect.Sets;
+import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
 import java.util.HashMap;
 import java.util.Map;
@@ -11,6 +12,7 @@ import net.vob.util.math.Matrix;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL20;
+import org.lwjgl.opengl.GL30;
 import org.lwjgl.opengl.GL32;
 import org.lwjgl.opengl.GL43;
 
@@ -46,7 +48,7 @@ final class GLShaderProgram extends GLObject {
     private GLShader vert = null, geom = null, frag = null;
     private byte status = 0;
     
-    final Map<String, Integer> UNIFORMS = new HashMap<>();
+    final Map<String, Integer> PROGRAM_RESOURCES = new HashMap<>();
     
     @Override
     void init() {
@@ -192,9 +194,14 @@ final class GLShaderProgram extends GLObject {
         }
         
         int numUniforms = GL43.glGetProgramInterfacei(prog, GL43.GL_UNIFORM, GL43.GL_ACTIVE_RESOURCES);
+        int numShaderStorageBlocks = GL43.glGetProgramInterfacei(prog, GL43.GL_SHADER_STORAGE_BLOCK, GL43.GL_ACTIVE_RESOURCES);
         
         for (int i = 0; i < numUniforms; ++i)
-            UNIFORMS.put(GL43.glGetProgramResourceName(prog, GL43.GL_UNIFORM, i), i);
+            PROGRAM_RESOURCES.put(GL43.glGetProgramResourceName(prog, GL43.GL_UNIFORM, i), i);
+        for (int i = 0; i < numShaderStorageBlocks; ++i) {
+            GL43.glShaderStorageBlockBinding(prog, i, i);
+            PROGRAM_RESOURCES.put(GL43.glGetProgramResourceName(prog, GL43.GL_SHADER_STORAGE_BLOCK, i), i);
+        }
         
         setStatus(STATUS_LINKED);
         return null;
@@ -203,7 +210,7 @@ final class GLShaderProgram extends GLObject {
     /**
      * Binds this shader program.
      */
-    public void bind() {
+    void bind() {
         if (isClosed())
             throw new IllegalStateException(LocaleUtils.format("global.Exception.Closed", "GLShaderProgram"));
         
@@ -213,7 +220,7 @@ final class GLShaderProgram extends GLObject {
     /**
      * Unbinds this shader program.
      */
-    public void unbind() {
+    void unbind() {
         if (isClosed())
             throw new IllegalStateException(LocaleUtils.format("global.Exception.Closed", "GLShaderProgram"));
         
@@ -221,18 +228,46 @@ final class GLShaderProgram extends GLObject {
     }
     
     /**
-     * Uploads a 4x4 matrix to the given uniform; makes no checks that this program
-     * actually has such a uniform. Note that this program must be bound when this
-     * method is invoked.
+     * Uploads a vector of 3 values to the given uniform. Note that this program 
+     * must be bound when this method is invoked.
+     * 
+     * @param u the first value
+     * @param v the second value
+     * @param w the third value
+     * @param name the name of the uniform
+     */
+    void uniform3ui(int u, int v, int w, String name) {
+        if (PROGRAM_RESOURCES.containsKey(name))
+            GL30.glUniform3ui(PROGRAM_RESOURCES.get(name), u, v, w);
+    }
+    
+    /**
+     * Uploads a 4x4 matrix to the given uniform. Note that this program must be
+     * bound when this method is invoked.
      * 
      * @param mat the {@link Matrix} to pass to the shader uniform
      * @param name the name of the uniform
      */
-    public void uniformMatrix4(Matrix mat, String name) {
-        mat.writeToBuffer(MATRIX_BUFFER, false);
-        MATRIX_BUFFER.flip();
-        GL20.glUniformMatrix4fv(UNIFORMS.get(name), true, MATRIX_BUFFER);
-        MATRIX_BUFFER.clear();
+    void uniformMatrix4(Matrix mat, String name) {
+        if (PROGRAM_RESOURCES.containsKey(name)) {
+            mat.writeToBuffer(MATRIX_BUFFER, false);
+            MATRIX_BUFFER.flip();
+            GL20.glUniformMatrix4fv(PROGRAM_RESOURCES.get(name), true, MATRIX_BUFFER);
+            MATRIX_BUFFER.clear();
+        }
+    }
+    
+    /**
+     * Binds the given Shader Storage Buffer Object to the given named uniform block 
+     * in the program. Note that this program must be bound when this method is
+     * invoked.
+     * 
+     * @param ssbo the index of the SSBO to bind
+     * @param name the name of the uniform block
+     */
+    void bindShaderStorage(int ssbo, String name) {
+        if (PROGRAM_RESOURCES.containsKey(name))
+            GL30.glBindBufferBase(GL43.GL_SHADER_STORAGE_BUFFER, PROGRAM_RESOURCES.get(name), ssbo);
     }
     
     @Override

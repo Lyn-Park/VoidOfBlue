@@ -4,6 +4,7 @@ import com.google.common.collect.Iterators;
 import java.util.ArrayDeque;
 import java.util.Collection;
 import java.util.ConcurrentModificationException;
+import java.util.Deque;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
@@ -12,7 +13,6 @@ import java.util.Optional;
 import java.util.Queue;
 import java.util.Set;
 import java.util.Spliterator;
-import java.util.Stack;
 import java.util.function.BiFunction;
 import java.util.function.BinaryOperator;
 import java.util.function.Consumer;
@@ -25,24 +25,22 @@ import net.vob.util.logging.LocaleUtils;
  * minimize the effort required to implement this interface.<p>
  * 
  * To implement an unmodifiable tree, the programmer needs only to extend this class and
- * provide implementations for {@link getValue()}, {@link parent()},
+ * provide implementations for {@link getValue()}, {@link #getParent()},
  * {@link map(Function)} and {@link childLikeWalk()}; the child-like walk iterator
  * should <i>not</i> have an implementation of {@code remove} if the tree is to be
  * unmodifiable.<p>
  * 
  * To implement a tree that can have elements added to it, the programmer must
- * additionally override {@link doSetValue(Object)}, {@link doAddChild(Object)} and
- * {@link doAddChild(AbstractTree)}; these are template helper methods for the actual
- * {@code setValue} and {@code add} methods inherited from {@code Tree}, and thus
- * should ideally remain as {@code protected} members in their implementations. By
- * default, these 3 methods simply throw an {@link UnsupportedOperationException}. See
- * the javadocs for each method for more information.<p>
+ * additionally override {@link setValue(Object)}, {@link add(Object)} and
+ * {@link add(AbstractTree)}. By default, these 3 methods simply throw an
+ * {@link UnsupportedOperationException}. See the javadocs for each method for more
+ * information.<p>
  * 
  * To implement a tree that can have elements removed from it, the programmer must simply
  * override the {@link Iterator#remove() remove()} method in the child-like walk
  * iterator. See {@link childLikeWalk()} for more information.<p>
  * 
- * Any class that extends {@code AbstractTree} that permits mutability should also make
+ * Any class extending {@code AbstractTree} that permits mutability should also make
  * sure to call {@link incrementModHash()} as appropriate. This alters an internal
  * 'mod hash', which is used by the {@link Spliterator} of the tree to determine when
  * structural interference occurs during traversal; it also propagates the change up the
@@ -52,32 +50,48 @@ import net.vob.util.logging.LocaleUtils;
  * 
  * The iteration order of the {@linkplain breadthFirstWalk() breadth-first},
  * {@linkplain preOrderWalk() pre-order}, and {@linkplain postOrderWalk() post-order}
- * walks is defined by the implementation of the child-like walk iterator. Note that due
- * to the use of stacks/queues in the iterators, the breadth-first iterator iterates over
- * the children <i>in the order</i> they were returned by the child-like iterator;
- * conversely, the pre-order and post-order iterators iterate over the children
- * <i>in reverse order</i> as returned by the child-like iterator. Implementing classes
- * that do not want this type of behaviour must return custom iterators from the
- * respective methods.<p>
+ * walks is defined by the implementation of the {@linkplain childLikeWalk() child-like}
+ * walk.<p>
  * 
- * Finally, note that all methods (apart from {@code setValue(..)} and
- * {@code add(..)}) can be overridden, if the tree structure being implemented
- * admits a more efficient implementation.
+ * Finally, note that all methods (other than {@code incrementModHash()}) can be
+ * overridden, if the tree structure being implemented admits a more efficient
+ * implementation.
  * 
  * @param <E> the type of values in this tree
- */
-public abstract class AbstractTree<E> implements Tree<E, AbstractTree<? extends E>> {
+ */ 
+public abstract class AbstractTree<E> implements Tree<E, AbstractTree<E>> {
     transient int modHash = super.hashCode();
     
     /**
-     * Sets the value of the root node of the currentNode tree. By default, this 
-     * method simply throws an {@link UnsupportedOperationException}.<p>
+     * Increments the mod hash of this tree and all it's ancestors.<p>
+     * 
+     * The mod hash is a type of hash value, initially derived from the 
+     * {@code super.hashCode()} of this tree, and is then incremented for both this
+     * tree and all ancestor trees through this method. The mod hash is used for the
+     * {@link Spliterator} to determine if any structural interference has occurred
+     * during traversal. Any trees that implement their own mutating methods without
+     * overriding {@link spliterator()} are <i>expected</i> to invoke this method;
+     * failure to do so will result in the {@linkplain spliterator() spliterator}
+     * instances of the involved trees and their ancestors being at least partially
+     * blind to any concurrent structural interference.
+     */
+    protected final void incrementModHash() {
+        modHash++;
+        
+        Iterator<? extends AbstractTree<E>> it = ancestralWalk();
+        while (it.hasNext())
+            it.next().modHash++;
+    }
+    
+    /**
+     * Sets the value of the root node of this tree. By default, this method simply
+     * throws an {@link UnsupportedOperationException}.<p>
      * 
      * <b>Note</b>: implementations of this method are <i>expected</i> to invoke
-     * {@link incrementModHash()} <i>on this tree</i>. Failure to do so will
-     * result in the {@linkplain spliterator() spliterator} instances for this
-     * tree and any ancestors being at least partially blind to any concurrent
-     * structural modification.
+     * {@link incrementModHash()} <i>on this tree</i>. Failure to do so will result
+     * in the {@linkplain spliterator() spliterator} instances for this tree and
+     * any ancestors being at least partially blind to any concurrent structural
+     * modification.
      * 
      * @param value the new value of the root node
      * @throws UnsupportedOperationException if this implementation of
@@ -89,10 +103,10 @@ public abstract class AbstractTree<E> implements Tree<E, AbstractTree<? extends 
     }
     
     /**
-     * Adds a child node to the root node of the current tree. The given value is the
-     * value of the new child. An implementation of this method must <i>also</i>
-     * handle setting the parent of the new child node. By default, this method
-     * simply throws an {@link UnsupportedOperationException}.<p>
+     * {@inheritDoc}<p>
+     * 
+     * By default, this method simply throws an
+     * {@link UnsupportedOperationException}.<p>
      * 
      * <b>Note</b>: implementations of this method are <i>expected</i> to invoke
      * {@link incrementModHash()} <i>on this tree immediately after the addition 
@@ -112,15 +126,10 @@ public abstract class AbstractTree<E> implements Tree<E, AbstractTree<? extends 
     }
     
     /**
-     * Adds an entire child tree to this node, also known as 'grafting'. This simply
-     * treats the root node of the given tree as a child of this node. An
-     * implementation of this method must <i>also</i> handle setting the parent of 
-     * the child node, removing it from its current parent if necessary. By default,
-     * this method simply throws an {@link UnsupportedOperationException}.<p>
+     * {@inheritDoc}<p>
      * 
-     * Implementing classes should ensure that this method never causes a cyclic
-     * reference by attempting to add an ancestor node as a child, as the data
-     * structure will then cease to be a 'tree'.<p>
+     * By default, this method simply throws an
+     * {@link UnsupportedOperationException}.<p>
      * 
      * <b>Note</b>: implementations of this method are <i>expected</i> to invoke
      * {@link incrementModHash()} <i>on the added child tree immediately after the
@@ -132,12 +141,11 @@ public abstract class AbstractTree<E> implements Tree<E, AbstractTree<? extends 
      * 
      * @param tree
      * @return 
-     * @throws NullPointerException if {@code tree} is {@code null}
      * @throws UnsupportedOperationException if this implementation of
      * {@code AbstractTree} is unmodifiable
      */
     @Override
-    public boolean add(AbstractTree<? extends E> tree) {
+    public boolean add(AbstractTree<E> tree) {
         throw new UnsupportedOperationException(LocaleUtils.format("global.Exception.UnsupportedOperationException", "Tree", "add"));
     }
     
@@ -147,25 +155,34 @@ public abstract class AbstractTree<E> implements Tree<E, AbstractTree<? extends 
         values.forEach((val) -> AbstractTree.this.add(val));
     }
     
+    /**
+     * {@inheritDoc}<p>
+     * 
+     * Note that the {@code AbstractTree} implementation of this method will never
+     * attempt to remove the root node. Also, note that the encounter order for nodes
+     * is functionally identical to {@link breadthFirstWalk()}.
+     * 
+     * @param value {@inheritDoc}
+     * @return
+     */
     @Override
-    public AbstractTree<? extends E> remove(Object value) {
-        Iterator<? extends AbstractTree<? extends E>> it = breadthFirstWalk();
-        AbstractTree<? extends E> tree;
+    public AbstractTree<E> remove(Object value) {
+        Queue<AbstractTree<E>> queue = new ArrayDeque();
+        queue.add(this);
         
-        if (value == null) {
-            while (it.hasNext()) {
-                if ((tree = it.next()).getValue() == null) {
-                    it.remove();
+        Iterator<? extends AbstractTree<E>> children;
+        AbstractTree<E> tree;
+        
+        while (!queue.isEmpty()) {
+            children = queue.poll().childLikeWalk();
+            
+            while (children.hasNext()) {
+                if (Objects.equals((tree = children.next()).getValue(), value)) {
+                    children.remove();
                     return tree;
-                }
-            }
-        } else {
-            while (it.hasNext()) {
-                if (value.equals((tree = it.next()).getValue())) {
-                    it.remove();
-                    return tree;
-                }
-            }
+                } else
+                    queue.add(tree);
+            }  
         }
         
         return null;
@@ -179,19 +196,38 @@ public abstract class AbstractTree<E> implements Tree<E, AbstractTree<? extends 
         });
     }
     
+    /**
+     * {@inheritDoc}<p>
+     * 
+     * Note that the {@code AbstractTree} implementation of this method will never
+     * attempt to remove the root node. Also, note that the encounter order for nodes
+     * is functionally identical to {@link breadthFirstWalk()}.
+     * 
+     * @param predicate {@inheritDoc}
+     * @return
+     * @throws NullPointerException {@inheritDoc}
+     */
     @Override
-    public AbstractTree<? extends E> removeIf(Predicate<? super E> predicate) {
-        Objects.requireNonNull(predicate);
-        Iterator<? extends AbstractTree<? extends E>> it = breadthFirstWalk();
-        AbstractTree<? extends E> tree;
+    public AbstractTree<E> removeIf(Predicate<? super E> predicate) {
+        if (predicate == null)
+            throw new NullPointerException();
         
-        while (it.hasNext()) {
-            tree = it.next();
-            if (predicate.test(tree.getValue())) {
-                if (tree != this)
-                    it.remove();
-                return tree;
-            }
+        Queue<AbstractTree<E>> queue = new ArrayDeque();
+        queue.add(this);
+        
+        Iterator<? extends AbstractTree<E>> children;
+        AbstractTree<E> tree;
+        
+        while (!queue.isEmpty()) {
+            children = queue.poll().childLikeWalk();
+            
+            while (children.hasNext()) {
+                if (predicate.test((tree = children.next()).getValue())) {
+                    children.remove();
+                    return tree;
+                } else
+                    queue.add(tree);
+            }  
         }
         
         return null;
@@ -199,7 +235,7 @@ public abstract class AbstractTree<E> implements Tree<E, AbstractTree<? extends 
     
     @Override
     public int size() {
-        Iterator<? extends AbstractTree<? extends E>> it = breadthFirstWalk();
+        Iterator<? extends AbstractTree<E>> it = breadthFirstWalk();
         int size = 0;
         
         while (it.hasNext()) {
@@ -212,7 +248,7 @@ public abstract class AbstractTree<E> implements Tree<E, AbstractTree<? extends 
     
     @Override
     public boolean contains(Object o) {
-        Iterator<? extends AbstractTree<? extends E>> it = breadthFirstWalk();
+        Iterator<? extends AbstractTree<E>> it = breadthFirstWalk();
         
         if (o == null) {
             while (it.hasNext())
@@ -230,7 +266,7 @@ public abstract class AbstractTree<E> implements Tree<E, AbstractTree<? extends 
     @Override
     public boolean containsAll(Collection<?> values) {
         Objects.requireNonNull(values);
-        Iterator<? extends AbstractTree<? extends E>> it = breadthFirstWalk();
+        Iterator<? extends AbstractTree<E>> it = breadthFirstWalk();
         Set<?> set = new HashSet<>(values);
         
         while (it.hasNext() && !set.isEmpty()) {
@@ -243,17 +279,17 @@ public abstract class AbstractTree<E> implements Tree<E, AbstractTree<? extends 
     }
     
     @Override
-    public boolean containsSubTree(AbstractTree<? extends E> tree) {
+    public boolean containsSubTree(AbstractTree<E> tree) {
         Objects.requireNonNull(tree);
-        Iterator<? extends AbstractTree<? extends E>> it = breadthFirstWalk();
+        Iterator<? extends AbstractTree<E>> it = breadthFirstWalk();
         
         while (true) {
-            AbstractTree<? extends E> subtree = searchForNextNode(it, tree.getValue());
+            AbstractTree<E> subtree = searchForNextNode(it, tree.getValue());
             if (subtree == null)
                 return false;
             
-            Iterator<? extends AbstractTree<? extends E>> subtreeIt = subtree.breadthFirstWalk();
-            Iterator<? extends AbstractTree<? extends E>> queryIt = tree.breadthFirstWalk();
+            Iterator<? extends AbstractTree<E>> subtreeIt = subtree.breadthFirstWalk();
+            Iterator<? extends AbstractTree<E>> queryIt = tree.breadthFirstWalk();
             
             while (subtreeIt.hasNext()) {
                 if (!queryIt.hasNext() || 
@@ -268,7 +304,7 @@ public abstract class AbstractTree<E> implements Tree<E, AbstractTree<? extends 
     
     @Override
     public int degree() {
-        Iterator<? extends AbstractTree<? extends E>> it = childLikeWalk();
+        Iterator<? extends AbstractTree<E>> it = childLikeWalk();
         int degree = 0;
         while (it.hasNext()) {
             it.next();
@@ -279,7 +315,7 @@ public abstract class AbstractTree<E> implements Tree<E, AbstractTree<? extends 
     
     @Override
     public int depth()  {
-        Iterator<? extends AbstractTree<? extends E>> it = ancestralWalk();
+        Iterator<? extends AbstractTree<E>> it = ancestralWalk();
         int depth = 0;
         while (it.hasNext()) {
             it.next();
@@ -290,29 +326,29 @@ public abstract class AbstractTree<E> implements Tree<E, AbstractTree<? extends 
     
     @Override
     public boolean isLeaf() {
-        Iterator<? extends AbstractTree<? extends E>> it = childLikeWalk();
+        Iterator<? extends AbstractTree<E>> it = childLikeWalk();
         return !it.hasNext();
     }
     
     @Override
     public boolean isRoot() {
-        Iterator<? extends AbstractTree<? extends E>> it = ancestralWalk();
+        Iterator<? extends AbstractTree<E>> it = ancestralWalk();
         return !it.hasNext();
     }
     
     @Override
-    public AbstractTree<? extends E> root() {
-        Iterator<? extends AbstractTree<? extends E>> it = ancestralWalk();
-        AbstractTree<? extends E> tree = this;
+    public AbstractTree<E> root() {
+        Iterator<? extends AbstractTree<E>> it = ancestralWalk();
+        AbstractTree<E> tree = this;
         while (it.hasNext())
             tree = it.next();
         return tree;
     }
     
     @Override
-    public void forEach(Consumer<? super AbstractTree<? extends E>> action) {
+    public void forEach(Consumer<? super AbstractTree<E>> action) {
         Objects.requireNonNull(action);
-        Iterator<? extends AbstractTree<? extends E>> it = breadthFirstWalk();
+        Iterator<? extends AbstractTree<E>> it = breadthFirstWalk();
         
         while (it.hasNext())
             action.accept(it.next());
@@ -357,13 +393,13 @@ public abstract class AbstractTree<E> implements Tree<E, AbstractTree<? extends 
      * or an empty {@code Optional} if the root node, and thus the entire tree, fails
      * the {@code selector} predicate
      */
-    public Optional<? extends E> fold(Predicate<? super AbstractTree<? extends E>> selector, BinaryOperator<E> accumulator) {
-        Queue<AbstractTree<? extends E>> queue = new ArrayDeque<>();
+    public Optional<E> fold(Predicate<? super AbstractTree<E>> selector, BinaryOperator<E> accumulator) {
+        Queue<AbstractTree<E>> queue = new ArrayDeque<>();
         queue.add(this);
         E result = null;
         
         while (!queue.isEmpty()) {
-            AbstractTree<? extends E> tree = queue.poll();
+            AbstractTree<E> tree = queue.poll();
             
             if (selector.test(tree)) {
                 if (result == null)
@@ -371,7 +407,7 @@ public abstract class AbstractTree<E> implements Tree<E, AbstractTree<? extends 
                 else
                     result = accumulator.apply(result, tree.getValue());
                 
-                Iterator<? extends AbstractTree<? extends E>> it = tree.childLikeWalk();
+                Iterator<? extends AbstractTree<E>> it = tree.childLikeWalk();
                 while (it.hasNext())
                     queue.add(it.next());
             }
@@ -420,18 +456,18 @@ public abstract class AbstractTree<E> implements Tree<E, AbstractTree<? extends 
      * second argument is always the value of the current node being processed
      * @return the result of the fold operation
      */
-    public <U> U fold(U identity, Predicate<? super AbstractTree<? extends E>> selector, BiFunction<U, ? super E, U> accumulator) {
-        Queue<AbstractTree<? extends E>> queue = new ArrayDeque<>();
+    public <U> U fold(U identity, Predicate<? super AbstractTree<E>> selector, BiFunction<U, ? super E, U> accumulator) {
+        Queue<AbstractTree<E>> queue = new ArrayDeque<>();
         queue.add(this);
         U result = identity;
         
         while (!queue.isEmpty()) {
-            AbstractTree<? extends E> tree = queue.poll();
+            AbstractTree<E> tree = queue.poll();
             
             if (selector.test(tree)) {
                 result = accumulator.apply(result, tree.getValue());
                 
-                Iterator<? extends AbstractTree<? extends E>> it = tree.childLikeWalk();
+                Iterator<? extends AbstractTree<E>> it = tree.childLikeWalk();
                 while (it.hasNext())
                     queue.add(it.next());
             }
@@ -466,7 +502,7 @@ public abstract class AbstractTree<E> implements Tree<E, AbstractTree<? extends 
      * @return the result of the fold operation
      */
     public E foldAncestors(BinaryOperator<E> accumulator) {
-        Iterator<? extends AbstractTree<? extends E>> it = ancestralWalk();
+        Iterator<? extends AbstractTree<E>> it = ancestralWalk();
         E result = getValue();
         
         while (it.hasNext())
@@ -475,8 +511,8 @@ public abstract class AbstractTree<E> implements Tree<E, AbstractTree<? extends 
         return result;
     }
     
-    private AbstractTree<? extends E> searchForNextNode(Iterator<? extends AbstractTree<? extends E>> it, Object o) {
-        AbstractTree<? extends E> tree;
+    private AbstractTree<E> searchForNextNode(Iterator<? extends AbstractTree<E>> it, Object o) {
+        AbstractTree<E> tree;
         
         if (o == null) {
             while (it.hasNext())
@@ -489,29 +525,6 @@ public abstract class AbstractTree<E> implements Tree<E, AbstractTree<? extends 
         }
         
         return null;
-    }
-    
-    /**
-     * Increments the mod hash of this tree and all it's ancestors.<p>
-     * 
-     * The mod hash is a type of hash value, initially derived from the 
-     * {@code super.hashCode()} of this tree, and is then incremented for both this
-     * tree and all ancestor trees through this method. The mod hash is used for the
-     * {@link Spliterator} to determine if any structural interference has occurred
-     * during traversal. Any trees that implement their own mutating methods without
-     * overriding {@link spliterator()} are <i>expected</i> to invoke this method;
-     * failure to do so will result in the {@linkplain spliterator() spliterator}
-     * instances of the involved trees and their ancestors being at least partially
-     * blind to any concurrent structural interference.
-     */
-    protected final void incrementModHash() {
-        modHash++;
-        
-        Iterator<? extends AbstractTree<? extends E>> it = ancestralWalk();
-        while (it.hasNext()) {
-            AbstractTree<? extends E> tree = it.next();
-            tree.modHash++;
-        }
     }
     
     @Override
@@ -530,7 +543,7 @@ public abstract class AbstractTree<E> implements Tree<E, AbstractTree<? extends 
         int hashCode = 3;
         hashCode = 7 * hashCode + getValue().hashCode();
         
-        Iterator<? extends AbstractTree<? extends E>> it = childLikeWalk();
+        Iterator<? extends AbstractTree<E>> it = childLikeWalk();
         while (it.hasNext())
             hashCode = 7 * hashCode + it.next().hashCode();
         
@@ -562,14 +575,28 @@ public abstract class AbstractTree<E> implements Tree<E, AbstractTree<? extends 
      * @return {@inheritDoc}
      */
     @Override
-    public abstract Iterator<? extends AbstractTree<? extends E>> childLikeWalk();
+    public abstract Iterator<? extends AbstractTree<E>> childLikeWalk();
     
     /**
      * Creates and returns a spliterator over the elements within this tree.<p>
      * 
      * This method returns a spliterator that reports {@link Spliterator#SIZED}
-     * and {@link Spliterator#SUBSIZED} as characteristics. The spliterator is not 
-     * <i>late-binding</i>.<p>
+     * and {@link Spliterator#SUBSIZED} as characteristics. The spliterator is not
+     * <i>late-binding</i>, and is <i>fail-fast</i> (on a best effort basis).<p>
+     * 
+     * The returned spliterator implements {@link Spliterator#trySplit() trySplit()}
+     * for limited parallelism. The spliterator keeps references to a 'forest' of trees
+     * during traversal; when each tree is processed, it is removed from the forest and
+     * its child trees are added to the forest. Initially, the forest contains only this
+     * tree instance. When {@code trySplit()} is invoked, it will attempt to split the
+     * forest in as balanced a manner as it can. Note that {@code trySplit()} will not
+     * split the forest if it contains only a single tree, even if that tree has
+     * children of its own; this is to ensure that at no point a spliterator's forest 
+     * contains two trees that are directly related to each other, as this will cause
+     * the descendant tree to be processed twice. Thus, the result of one invocation of
+     * {@code trySplit()} does <i>not</i> imply anything about future invocations of
+     * {@code trySplit()} after a call to
+     * {@link Spliterator#tryAdvance(Consumer) tryAdvance(action)}.<p>
      * 
      * For detecting structural interference during traversal, the spliterator makes
      * use of an internal 'mod hash' within the tree instance. This mod hash changes
@@ -591,18 +618,18 @@ public abstract class AbstractTree<E> implements Tree<E, AbstractTree<? extends 
     }
     
     private class TreeSpliterator implements Spliterator<E> {
-        Set<AbstractTree<? extends E>> trees;
+        Set<AbstractTree<E>> forest;
         long est = Long.MAX_VALUE;
         
-        TreeSpliterator(AbstractTree<? extends E> root) {
-            this.trees = new HashSet<>();
-            this.trees.add(root);
+        TreeSpliterator(AbstractTree<E> root) {
+            this.forest = new HashSet<>();
+            this.forest.add(root);
             
             this.est = root.size();
         }
         
-        private TreeSpliterator(Set<AbstractTree<? extends E>> trees) {
-            this.trees = trees;
+        private TreeSpliterator(Set<AbstractTree<E>> trees) {
+            this.forest = trees;
             this.est = trees.stream().mapToInt((tree) -> tree.size()).sum();
         }
 
@@ -613,33 +640,35 @@ public abstract class AbstractTree<E> implements Tree<E, AbstractTree<? extends 
         
         @Override
         public void forEachRemaining(Consumer<? super E> action) {
-            trees.stream().forEachOrdered((tree) -> {
+            forest.stream().forEachOrdered((tree) -> {
                 int expectedModHash = tree.modHash;
                 
-                Iterator<? extends AbstractTree<? extends E>> it = tree.breadthFirstWalk();
+                Iterator<? extends AbstractTree<E>> it = tree.breadthFirstWalk();
                 while (it.hasNext())
                     action.accept(it.next().getValue());
                 
                 if (tree.modHash != expectedModHash)
                     throw new ConcurrentModificationException();
             });
+            
+            forest.clear();
         }
 
         @Override
         public boolean tryAdvance(Consumer<? super E> action) {
-            Iterator<? extends AbstractTree<? extends E>> it = trees.iterator();
+            Iterator<? extends AbstractTree<E>> it = forest.iterator();
             if (!it.hasNext())
                 return false;
             
-            AbstractTree<? extends E> current = it.next();
+            AbstractTree<E> current = it.next();
             it.remove();
             
             int expectedModHash = current.modHash;
             
             action.accept(current.getValue());
-            Iterator<? extends AbstractTree<? extends E>> cit = current.childLikeWalk();
+            Iterator<? extends AbstractTree<E>> cit = current.childLikeWalk();
             while (cit.hasNext())
-                trees.add(cit.next());
+                forest.add(cit.next());
             
             if (current.modHash != expectedModHash)
                 throw new ConcurrentModificationException();
@@ -649,13 +678,14 @@ public abstract class AbstractTree<E> implements Tree<E, AbstractTree<? extends 
 
         @Override
         public Spliterator<E> trySplit() {
-            if (trees.size() <= 1)
+            if (forest.size() <= 1)
                 return null;
             
-            Set<AbstractTree<? extends E>> set1 = new HashSet<>(), set2 = new HashSet<>();
-            splitTrees(trees, set1, set2);
+            Set<AbstractTree<E>> set1 = new HashSet<>(), set2 = new HashSet<>();
+            splitTrees(forest, set1, set2);
             
-            trees = set1;
+            this.forest = set1;
+            this.est = forest.stream().mapToInt((tree) -> tree.size()).sum();
             return new TreeSpliterator(set2);
         }
 
@@ -664,8 +694,8 @@ public abstract class AbstractTree<E> implements Tree<E, AbstractTree<? extends 
             return est;
         }
         
-        private void splitTrees(Set<AbstractTree<? extends E>> tree, Set<AbstractTree<? extends E>> out1, Set<AbstractTree<? extends E>> out2) {
-            Iterator<AbstractTree<? extends E>> it = tree.iterator();
+        private void splitTrees(Set<AbstractTree<E>> tree, Set<AbstractTree<E>> out1, Set<AbstractTree<E>> out2) {
+            Iterator<AbstractTree<E>> it = tree.iterator();
             boolean turnout = false;
             
             while (it.hasNext()) {
@@ -679,41 +709,51 @@ public abstract class AbstractTree<E> implements Tree<E, AbstractTree<? extends 
     }
     
     @Override
-    public Iterator<? extends AbstractTree<? extends E>> ancestralWalk() {
+    public Iterator<? extends AbstractTree<E>> ancestralWalk() {
         return new AncestralIterator(this);
     }
     
-    private class AncestralIterator implements Iterator<AbstractTree<? extends E>> {
-        private AbstractTree<? extends E> current;
+    private class AncestralIterator implements Iterator<AbstractTree<E>> {
+        private AbstractTree<E> current;
         
-        AncestralIterator(AbstractTree<? extends E> current) {
+        AncestralIterator(AbstractTree<E> current) {
             this.current = current;
         }
         
         @Override
         public boolean hasNext() {
-            return current.parent() != null;
+            return current.getParent() != null;
         }
 
         @Override
-        public AbstractTree<? extends E> next() {
+        public AbstractTree<E> next() {
             if (!hasNext())
                 throw new NoSuchElementException();
             
-            return (current = current.parent());
+            return (current = current.getParent());
         }
     }
     
+    /**
+     * {@inheritDoc}<p>
+     * 
+     * Note that the {@code AbstractTree} implementation of the breadth-first walk
+     * does <i>not</i> implement {@link Iterator#remove() remove()}; child classes that
+     * require the ability to remove from the breadth-first walk must override this
+     * method and return custom iterators, and ensure that any edge cases are
+     * gracefully handled (e.g. an attempt is made to remove the root node of the tree).
+     * 
+     * @return {@inheritDoc}
+     */
     @Override
-    public Iterator<? extends AbstractTree<? extends E>> breadthFirstWalk() {
+    public Iterator<? extends AbstractTree<E>> breadthFirstWalk() {
         return new BreadthFirstIterator(this);
     }
     
-    private class BreadthFirstIterator implements Iterator<AbstractTree<? extends E>> {
-        Queue<AbstractTree<? extends E>> queue = new ArrayDeque<>();
-        AbstractTree<? extends E> current = null;
+    private class BreadthFirstIterator implements Iterator<AbstractTree<E>> {
+        Queue<AbstractTree<E>> queue = new ArrayDeque<>();
         
-        BreadthFirstIterator(AbstractTree<? extends E> root) {
+        BreadthFirstIterator(AbstractTree<E> root) {
             queue.add(root);
         }
         
@@ -723,104 +763,88 @@ public abstract class AbstractTree<E> implements Tree<E, AbstractTree<? extends 
         }
 
         @Override
-        public AbstractTree<? extends E> next() {
+        public AbstractTree<E> next() {
             if (!hasNext())
                 throw new NoSuchElementException();
             
-            current = queue.poll();
+            AbstractTree<E> current = queue.poll();
             
-            Iterator<? extends AbstractTree<? extends E>> it = current.childLikeWalk();
+            Iterator<? extends AbstractTree<E>> it = current.childLikeWalk();
             while (it.hasNext())
                 queue.add(it.next());
             
             return current;
         }
-
-        @Override
-        public void remove() {
-            if (current == null)
-                throw new IllegalStateException();
-            
-            Iterator<? extends AbstractTree<? extends E>> siblings = current.parent().childLikeWalk();
-            while (siblings.hasNext()) {
-                if (siblings.next() == current) {
-                    siblings.remove();
-                    break;
-                }
-            }
-            
-            Iterator<? extends AbstractTree<? extends E>> children = current.childLikeWalk();
-            while (children.hasNext())
-                queue.remove(children.next());
-            
-            current = null;
-        }
     }
     
+    /**
+     * {@inheritDoc}<p>
+     * 
+     * Note that the {@code AbstractTree} implementation of the pre-order walk does 
+     * <i>not</i> implement {@link Iterator#remove() remove()}; child classes that
+     * require the ability to remove from the pre-order walk must override this method
+     * and return custom iterators, and ensure that any edge cases are gracefully
+     * handled (e.g. an attempt is made to remove the root node of the tree).
+     * 
+     * @return {@inheritDoc}
+     */
     @Override
-    public Iterator<AbstractTree<? extends E>> preOrderWalk() {
+    public Iterator<? extends AbstractTree<E>> preOrderWalk() {
         return new PreOrderIterator(this);
     }
     
-    private class PreOrderIterator implements Iterator<AbstractTree<? extends E>> {
-        Stack<AbstractTree<? extends E>> stack = new Stack<>();
-        AbstractTree<? extends E> current = null;
+    private class PreOrderIterator implements Iterator<AbstractTree<E>> {
+        Deque<AbstractTree<E>> stack = new ArrayDeque<>();
         
-        PreOrderIterator(AbstractTree<? extends E> root) {
+        PreOrderIterator(AbstractTree<E> root) {
             stack.push(root);
         }
         
         @Override
         public boolean hasNext() {
-            return !stack.empty();
+            return !stack.isEmpty();
         }
 
         @Override
-        public AbstractTree<? extends E> next() {
+        public AbstractTree<E> next() {
             if (!hasNext())
                 throw new NoSuchElementException();
             
-            current = stack.pop();
+            AbstractTree<E> current = stack.pop();
+            Deque<AbstractTree<E>> children = new ArrayDeque<>();
             
-            Iterator<? extends AbstractTree<? extends E>> it = current.childLikeWalk();
+            Iterator<? extends AbstractTree<E>> it = current.childLikeWalk();
             while (it.hasNext())
-                stack.push(it.next());
+                children.push(it.next());
+            
+            while (!children.isEmpty())
+                stack.push(children.pop());
             
             return current;
         }
-
-        @Override
-        public void remove() {
-            if (current == null)
-                throw new IllegalStateException();
-            
-            Iterator<? extends AbstractTree<? extends E>> siblings = current.parent().childLikeWalk();
-            while (siblings.hasNext()) {
-                if (siblings.next() == current) {
-                    siblings.remove();
-                    break;
-                }
-            }
-            
-            Iterator<? extends AbstractTree<? extends E>> children = current.childLikeWalk();
-            while (children.hasNext())
-                stack.remove(children.next());
-            
-            current = null;
-        }
     }
     
+    /**
+     * {@inheritDoc}<p>
+     * 
+     * Note that the {@code AbstractTree} implementation of the post-order walk does 
+     * <i>not</i> implement {@link Iterator#remove() remove()}; child classes that
+     * require the ability to remove from the post-order walk must override this method
+     * and return custom iterators, and ensure that any edge cases are gracefully
+     * handled (e.g. an attempt is made to remove the root node of the tree).
+     * 
+     * @return {@inheritDoc}
+     */
     @Override
-    public Iterator<AbstractTree<? extends E>> postOrderWalk() {
+    public Iterator<? extends AbstractTree<E>> postOrderWalk() {
         return new PostOrderIterator(this);
     }
     
-    private class PostOrderIterator implements Iterator<AbstractTree<? extends E>> {
-        Stack<AbstractTree<? extends E>> stack = new Stack<>();
-        Stack<Integer> degrees = new Stack<>();
-        AbstractTree<? extends E> current = null;
+    private class PostOrderIterator implements Iterator<AbstractTree<E>> {
+        Deque<AbstractTree<E>> stack = new ArrayDeque<>();
+        Deque<Integer> degrees = new ArrayDeque<>();
         
-        PostOrderIterator(AbstractTree<? extends E> root) {
+        PostOrderIterator(AbstractTree<E> root) {
             stack.push(root);
             degrees.push(1);
             addDescendantsToStack();
@@ -828,49 +852,38 @@ public abstract class AbstractTree<E> implements Tree<E, AbstractTree<? extends 
         
         @Override
         public boolean hasNext() {
-            return !stack.empty();
+            return !stack.isEmpty();
         }
 
         @Override
-        public AbstractTree<? extends E> next() {
+        public AbstractTree<E> next() {
             if (!hasNext())
                 throw new NoSuchElementException();
             
-            current = stack.pop();
+            AbstractTree<E> current = stack.pop();
             int degree = degrees.pop() - 1;
-            if (degree != 0 && !stack.empty()) {
+            if (degree != 0 && !stack.isEmpty()) {
                 degrees.push(degree);
                 addDescendantsToStack();
             }
             
             return current;
         }
-
-        @Override
-        public void remove() {
-            if (current == null)
-                throw new IllegalStateException();
-            
-            Iterator<? extends AbstractTree<? extends E>> siblings = current.parent().childLikeWalk();
-            while (siblings.hasNext()) {
-                if (siblings.next() == current) {
-                    siblings.remove();
-                    break;
-                }
-            }
-            
-            current = null;
-        }
         
         private void addDescendantsToStack() {
             while (!stack.peek().isLeaf()) {
                 int degree = 0;
                 
-                Iterator<? extends AbstractTree<? extends E>> children = stack.peek().childLikeWalk();
-                while (children.hasNext()) {
-                    stack.push(children.next());
+                Deque<AbstractTree<E>> children = new ArrayDeque<>();
+                
+                Iterator<? extends AbstractTree<E>> cit = stack.peek().childLikeWalk();
+                while (cit.hasNext()) {
+                    children.push(cit.next());
                     degree++;
                 }
+                
+                while (!children.isEmpty())
+                    stack.push(children.pop());
                 
                 degrees.push(degree);
             }

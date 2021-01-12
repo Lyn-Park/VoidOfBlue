@@ -482,16 +482,13 @@ final class GraphicsManager {
         // 'Global' uniform values, these do not change over the course of the use
         // of this program
         if (getStatus(STATUS_MATRICES_CHANGED)) {
-            if (program.UNIFORMS.containsKey(SHADER_UNIFORM_WINDOW_SIZE_NAME))
-                GL30.glUniform3ui(program.UNIFORMS.get(SHADER_UNIFORM_WINDOW_SIZE_NAME),
-                                  GraphicsEngine.windowOptions.getWindowWidth(),
-                                  GraphicsEngine.windowOptions.getWindowHeight(),
-                                  GraphicsEngine.windowOptions.getWindowDepth());
+            program.uniform3ui(GraphicsEngine.windowOptions.getWindowWidth(),
+                               GraphicsEngine.windowOptions.getWindowHeight(),
+                               GraphicsEngine.windowOptions.getWindowDepth(),
+                               SHADER_UNIFORM_WINDOW_SIZE_NAME);
 
-            if (program.UNIFORMS.containsKey(SHADER_UNIFORM_PROJECTION_MATRIX_NAME))
-                program.uniformMatrix4(PROJ_MATRIX, SHADER_UNIFORM_PROJECTION_MATRIX_NAME);
-            if (program.UNIFORMS.containsKey(SHADER_UNIFORM_VIEW_MATRIX_NAME))
-                program.uniformMatrix4(VIEW_MATRIX, SHADER_UNIFORM_VIEW_MATRIX_NAME);
+            program.uniformMatrix4(PROJ_MATRIX, SHADER_UNIFORM_PROJECTION_MATRIX_NAME);
+            program.uniformMatrix4(VIEW_MATRIX, SHADER_UNIFORM_VIEW_MATRIX_NAME);
         }
         
         // Do the rendering passes for each renderable

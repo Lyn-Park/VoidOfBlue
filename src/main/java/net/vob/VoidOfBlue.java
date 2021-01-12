@@ -16,7 +16,7 @@ import net.vob.mods.ModpackManager;
 import net.vob.core.graphics.GraphicsEngine;
 import net.vob.core.graphics.WindowOptions;
 import net.vob.util.AbstractTree;
-import net.vob.util.RecursiveArrayTree;
+import net.vob.util.ArrayTree;
 import net.vob.util.logging.Level;
 import net.vob.util.logging.LocaleUtils;
 import net.vob.util.math.AffineTransformation;
@@ -187,20 +187,20 @@ public final class VoidOfBlue {
     public static void main(String[] args) {
         int status = 0;
         
-//        try {
-//            begin();
-//            loop();
-//        } catch (Throwable t) {
-//            LOG.log(Level.SEVERE, "VoidOfBlue.main.Exception", t);
-//            status |= 1;
-//        } finally {
-//            try {
-//                end();
-//            } catch (Throwable t) {
-//                LOG.log(Level.SEVERE, "VoidOfBlue.main.EndException", t);
-//                status |= 2;
-//            }
-//        }
+        try {
+            begin();
+            loop();
+        } catch (Throwable t) {
+            LOG.log(Level.SEVERE, "VoidOfBlue.main.Exception", t);
+            status |= 1;
+        } finally {
+            try {
+                end();
+            } catch (Throwable t) {
+                LOG.log(Level.SEVERE, "VoidOfBlue.main.EndException", t);
+                status |= 2;
+            }
+        }
 
         System.exit(status);
     }
