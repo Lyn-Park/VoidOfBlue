@@ -36,13 +36,51 @@ public class ArrayTree<E> extends AbstractTree<E> {
      * @param value the value of the tree node
      */
     public ArrayTree(E value) {
+        this(value, 0);
+    }
+    
+    /**
+     * Instantiates a new {@code ArrayTree} with the given value, an initial array
+     * of children with the given size, and an initially {@code null} parent.
+     * {@code ArrayTree} instances impose no restrictions on the elements of the tree.
+     * 
+     * @param value the value of the tree node
+     * @param initialSize the initial size of the internal child array
+     */
+    public ArrayTree(E value, int initialSize) {
         this.value = value;
-        this.children = new ArrayTree[0];
+        this.children = new ArrayTree[initialSize];
+    }
+    
+    private int getIndexOfChild(ArrayTree<E> child) {
+        for (int i = 0; i < children.length; ++i)
+            if (children[i] == child)
+                return i;
+        
+        return -1;
     }
     
     private void insertChild(int index, ArrayTree<E> child) {
-        child.incrementModHash();
+        if (index < children.length && children[index] == child)
+            return;
+        
         incrementModHash();
+        
+        if (child.parent == this) {
+            int prevIndex = getIndexOfChild(child);
+            
+            if (prevIndex < index)
+                for (int i = prevIndex; i < index; ++i)
+                    children[i] = children[i+1];
+            else
+                for (int i = prevIndex; i > index; --i)
+                    children[i] = children[i-1];
+            
+            children[index] = child;
+            return;
+        }
+        
+        child.incrementModHash();
         
         ArrayTree<E>[] newChildren = new ArrayTree[children.length + 1];
         
@@ -59,7 +97,24 @@ public class ArrayTree<E> extends AbstractTree<E> {
     }
     
     private void replaceChild(int index, ArrayTree<E> child) {
+        if (children[index] == child)
+            return;
+        
         children[index].incrementModHash();
+        
+        if (child.parent == this) {
+            int prevIndex = getIndexOfChild(child);
+            removeChild(prevIndex);
+            
+            if (index > prevIndex)
+                index--;
+            
+            children[index].parent = null;
+            children[index] = child;
+            
+            return;
+        }
+        
         child.incrementModHash();
         
         children[index].parent = null;
@@ -122,8 +177,9 @@ public class ArrayTree<E> extends AbstractTree<E> {
     
     /**
      * Constructs a new tree with the given value, and attaches it to this tree as
-     * a direct child. {@code ArrayTree} instances impose no restrictions on the
-     * elements of the tree.
+     * a direct child. The new child is appended to the end of the child array; thus,
+     * it has an index of {@link degree()} {@code - 1} after this method returns.
+     * {@code ArrayTree} instances impose no restrictions on the elements of the tree.
      * 
      * @param value {@inheritDoc}
      * @return always {@code true}
@@ -136,8 +192,16 @@ public class ArrayTree<E> extends AbstractTree<E> {
     }
     
     /**
-     * Attaches the given tree to this tree as a direct child. {@code ArrayTree}
-     * instances impose no restrictions on the elements of the tree.
+     * Attaches the given tree to this tree as a direct child. The new child is
+     * appended to the end of the child array; thus, it has an index of
+     * {@link degree()} {@code - 1} after this method returns. {@code ArrayTree}
+     * instances impose no restrictions on the elements of the tree.<p>
+     * 
+     * The given tree will be removed from its current parent tree, if it has one.
+     * If the given tree already has this tree as its parent, then this method
+     * effectively moves the tree to the end of the child array, shifting other
+     * children as needed.
+     * 
      * @param child {@inheritDoc}
      * @return always {@code true}, if an exception is not thrown
      * @throws NullPointerException if {@code child} is {@code null}
@@ -157,7 +221,10 @@ public class ArrayTree<E> extends AbstractTree<E> {
      * it to this tree node as a direct child. {@code ArrayTree} instances impose no
      * restrictions on the elements of the tree. The new child's index is 
      * {@code index}, and any children with indices {@code i >= index} are shifted so
-     * their new indices are {@code i+1}.
+     * their new indices are {@code i+1}.<p>
+     * 
+     * Note the return value is invariant; this is so that this method conforms to the
+     * signature of {@link add(Object)}.
      * 
      * @param index the index to insert the new child at
      * @param value the value of the new child
@@ -179,6 +246,11 @@ public class ArrayTree<E> extends AbstractTree<E> {
      * instances impose no restrictions on the elements of the tree. The new child's
      * index is {@code index}, and any children with indices {@code i >= index} are
      * shifted so their new indices are {@code i+1}.<p>
+     * 
+     * The given tree will be removed from its current parent tree, if it has one.
+     * If the given tree already has this tree as its parent, then this method
+     * effectively moves the tree to the given index in the child array, shifting
+     * other children (in either direction) as needed.<p>
      * 
      * Note the return value is invariant, and the tree parameter is an
      * {@link AbstractTree} rather than an {@code ArrayTree}; this is so that this
@@ -266,7 +338,10 @@ public class ArrayTree<E> extends AbstractTree<E> {
     }
     
     /**
-     * Removes the child at the given index. Returns the removed child tree.
+     * Removes the child at the given index. Any children with indices 
+     * {@code i >= index} are shifted so their new indices are {@code i-1}. Returns
+     * the removed child tree.
+     * 
      * @param index the index of the child to remove
      * @return the remove child
      * @throws IndexOutOfBoundsException if {@code index < 0} or

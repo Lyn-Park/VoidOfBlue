@@ -1,7 +1,6 @@
 package net.vob.core.graphics;
 
 import com.google.common.collect.Sets;
-import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
 import java.util.HashMap;
 import java.util.Map;

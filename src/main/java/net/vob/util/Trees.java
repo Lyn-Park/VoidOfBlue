@@ -89,7 +89,7 @@ public final class Trees {
     /**
      * Converts a generic tree to a {@link Set} of the contained values. All values in
      * the returned set are guaranteed to exist within the given tree (note that the set
-     * may <i>not</i> have the same size as the tree, as duplicate values may be discarded).
+     * may <i>not</i> have the same size as the tree, as duplicate values are be discarded).
      * 
      * @see toBreadthFirstList(Tree)
      * @see toPreOrderList(Tree)

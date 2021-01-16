@@ -128,21 +128,21 @@ public interface Tree<E, T extends Tree<E, ? extends T>> {
     boolean isLeaf();
     
     /**
-     * Gets the value contained in this node.
+     * Gets the value contained in this tree node.
      * @return the value of this node
      */
     E getValue();
     
     /**
-     * Sets the value contained in this node of this tree.
+     * Sets the value contained in this tree node.
      * @param value the new value of this node
      */
     void setValue(E value);
     
     /**
-     * Adds a child to this node. The given value is the value of the new child node.
-     * An implementation of this method must <i>also</i> handle setting the parent
-     * of the new child node.<p>
+     * Adds a descendant to this tree. The given value is the value of the new descendant 
+     * node. An implementation of this method must <i>also</i> handle setting the parent
+     * of the new node.<p>
      * 
      * Trees that support this operation may place limitations on what elements may
      * be added to this tree. In particular, some trees will refuse to add {@code null}
@@ -175,9 +175,9 @@ public interface Tree<E, T extends Tree<E, ? extends T>> {
     boolean add(E value);
     
     /**
-     * Adds an entire child tree to this node, also known as 'grafting'. An
+     * Adds an entire descendant subtree to this tree, also known as 'grafting'. An
      * implementation of this method must <i>also</i> handle setting the parent of 
-     * the child node, removing it from its current parent if necessary.<p>
+     * the subtree's root node, removing it from its current parent if necessary.<p>
      * 
      * Trees that support this operation may place limitations on what subtrees may
      * be added to this tree. In particular, some trees will refuse to add {@code null}
@@ -219,14 +219,14 @@ public interface Tree<E, T extends Tree<E, ? extends T>> {
      * data structure will cease to be a 'tree' in that case. Such an attempt should be
      * handled as an exceptional reason for refusing to add the tree.
      * 
-     * @param tree the child tree to add
-     * @return {@code true} if the specified tree was successfully added as a child
-     * to the tree, {@code false} otherwise
+     * @param tree the subtree to add
+     * @return {@code true} if the specified tree was successfully added to the tree,
+     * {@code false} otherwise
      */
     boolean add(T tree);
     
     /**
-     * Adds all the given values to this node as new child nodes. This should conform to
+     * Adds all the given values to this node as new tree nodes. This should conform to
      * the behaviour of {@link #add(Object)}, but may employ a different, more efficient
      * algorithm for bulk operations.
      * 
