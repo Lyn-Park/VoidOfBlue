@@ -20,6 +20,8 @@ import net.vob.util.math.Vector3;
  * 
  * Meshes can also be used for defining various physical properties of the object in
  * question, such as the bounding box.
+ * 
+ * @author Lyn-Park
  */
 public final class Mesh extends Closable {
     private Vector3[] positions;

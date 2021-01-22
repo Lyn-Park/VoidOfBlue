@@ -41,6 +41,8 @@ import org.lwjgl.opengl.GLDebugMessageCallback;
  * several internal OpenGL constants (some of which may not be initialized until the
  * manager itself is), the graphical thread and associated callbacks, and other
  * miscellaneous items such as the currently selected objects.
+ * 
+ * @author Lyn-Park
  */
 final class GraphicsManager {
     private GraphicsManager() {}

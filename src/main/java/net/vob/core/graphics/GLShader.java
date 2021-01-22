@@ -21,6 +21,8 @@ import org.lwjgl.opengl.GL32;
  * 
  * Two default shaders exist, and are of the vertex shader and fragment shader types. No
  * default geometry shader exists.
+ * 
+ * @author Lyn-Park
  */
 final class GLShader extends GLObject {
     static final Registry<GLShader> REGISTRY = new Registry<>();

@@ -5,6 +5,13 @@ import net.vob.core.graphics.GraphicsEngine;
 import net.vob.util.Closable;
 import net.vob.util.logging.LocaleUtils;
 
+/**
+ * The abstract parent class for graphical textures. This is kept distinct from the
+ * internal texture objects in the graphics engine to promote decoupling between the 
+ * internal graphical state and the external program, as well as to prevent confusion.
+ * 
+ * @author Lyn-Park
+ */
 public abstract class Texture extends Closable {
     final int unit;
     

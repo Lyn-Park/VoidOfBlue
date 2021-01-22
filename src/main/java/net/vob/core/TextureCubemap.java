@@ -11,6 +11,13 @@ import net.vob.core.graphics.GraphicsEngine;
 import net.vob.util.Identity;
 import net.vob.util.logging.LocaleUtils;
 
+/**
+ * Container class for a graphical cubemap texture. This is kept distinct from the
+ * internal texture objects in the graphics engine to promote decoupling between the 
+ * internal graphical state and the external program, as well as to prevent confusion.
+ * 
+ * @author Lyn-Park
+ */
 public final class TextureCubemap extends Texture {
     private final Identity pxID, pyID, pzID, nxID, nyID, nzID;
     private BufferedImage pxIm, pyIm, pzIm, nxIm, nyIm, nzIm;

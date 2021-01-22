@@ -22,6 +22,7 @@ import java.util.function.Function;
  * Duplicate and {@code null} node values are permitted in this tree.
  * 
  * @param <E> the value type
+ * @author Lyn-Park
  */
 public class ArrayTree<E> extends AbstractTree<E> {
     private E value;

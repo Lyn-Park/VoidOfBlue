@@ -4,6 +4,8 @@ import net.vob.util.logging.LocaleUtils;
 
 /**
  * A special sub-class of {@code Vector} that has exactly 3 elements.
+ * 
+ * @author Lyn-Park
  */
 public final class Vector3 extends Vector {
     /** The read-only zero vector. Corresponds to (0, 0, 0). */

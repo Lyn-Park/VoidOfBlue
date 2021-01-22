@@ -6,6 +6,8 @@ import net.vob.util.logging.LocaleUtils;
 
 /**
  * A sub-class of {@code Matrix} that has only 1 column.
+ * 
+ * @author Lyn-Park
  */
 public class Vector extends Matrix {
     /**

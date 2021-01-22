@@ -6,6 +6,8 @@ import net.vob.util.logging.LocaleUtils;
  * A special sub-class of {@code Vector} that has exactly 4 elements. An instance
  * of this class represents the mathematical quaternion {@code w + ix + jy + kz},
  * where {@code w, x, y, z} are the 4 elements of this vector.
+ * 
+ * @author Lyn-Park
  */
 public final class Quaternion extends Vector {
     /** The read-only zero quaternion. Corresponds to (0, 0, 0, 0). */

@@ -22,6 +22,8 @@ import org.lwjgl.opengl.GL30;
  * that can be used to equate duplicate textures.<p>
  * 
  * A single default texture exists, and is bound to texture unit 0.
+ * 
+ * @author Lyn-Park
  */
 final class GLTextureCubemap extends GLTexture {
     static final GLTextureCubemap DEFAULT = new GLTextureCubemap(GraphicsEngine.DEFAULT_TEXTURE_ID,

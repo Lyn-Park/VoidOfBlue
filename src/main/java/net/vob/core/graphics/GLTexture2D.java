@@ -21,6 +21,8 @@ import org.lwjgl.opengl.GL30;
  * duplicate textures.<p>
  * 
  * A single default texture exists, and is bound to texture unit 0.
+ * 
+ * @author Lyn-Park
  */
 final class GLTexture2D extends GLTexture {
     static final GLTexture2D DEFAULT = new GLTexture2D(GraphicsEngine.DEFAULT_TEXTURE_ID, 0);

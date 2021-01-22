@@ -6,6 +6,8 @@ import org.lwjgl.opengl.GL13;
 
 /**
  * Abstract base class for texture objects.
+ * 
+ * @author Lyn-Park
  */
 abstract class GLTexture extends GLObject {
     static final Registry<GLTexture> REGISTRY = new Registry<>();

@@ -11,7 +11,15 @@ import java.util.ResourceBundle;
 import net.vob.mods.ModpackManager;
 
 /**
- * Utility class for formatting messages based off of the current locale.
+ * Utility class for formatting messages based off of the current locale. It is
+ * preferable (but not enforced) that logging messages are logged via
+ * {@link format(String, Object...) format(messageKey, args)}, as it is this
+ * method that performs the localization.<p>
+ * 
+ * The localization files are located at {@link LOGGING_BUNDLE_NAME} and
+ * {@link LEVEL_BUNDLE_NAME} in the resources folder.
+ * 
+ * @author Lyn-Park
  */
 public final class LocaleUtils {
     private LocaleUtils() {}

@@ -24,6 +24,8 @@ import org.lwjgl.opengl.GL43;
  * 
  * Several default shader programs exist, and are read-only programs that use the 
  * appropriate default shader stages.
+ * 
+ * @author Lyn-Park
  */
 final class GLShaderProgram extends GLObject {
     static final Registry<GLShaderProgram> REGISTRY = new Registry<>();

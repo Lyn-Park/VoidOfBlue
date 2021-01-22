@@ -7,6 +7,8 @@ import net.vob.util.logging.LocaleUtils;
 
 /**
  * Base class for 2D matrices and vectors.
+ * 
+ * @author Lyn-Park
  */
 public class Matrix {
     protected final int rows, columns;

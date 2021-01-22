@@ -58,6 +58,7 @@ import net.vob.util.logging.LocaleUtils;
  * implementation.
  * 
  * @param <E> the type of values in this tree
+ * @author Lyn-Park
  */ 
 public abstract class AbstractTree<E> implements Tree<E, AbstractTree<E>> {
     transient int modHash = super.hashCode();

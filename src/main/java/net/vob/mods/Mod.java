@@ -11,6 +11,8 @@ import org.json.JSONObject;
 /**
  * Container class for the mod and every point of information it has, as was
  * contained in the {@code mod_config.json} file.
+ * 
+ * @author Lyn-Park
  */
 public final class Mod {
     /** The JSON key to which the name of the mod is assigned in 

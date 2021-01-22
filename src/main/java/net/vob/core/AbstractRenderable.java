@@ -27,6 +27,8 @@ import net.vob.util.logging.LocaleUtils;
  * fully complete, or if this part of the initialization fails. See
  * {@link AbstractRenderable(Mesh, Shader, Texture...)} for more information on this worker
  * task, as well as any considerations that implementing classes/constructors must take.
+ * 
+ * @author Lyn-Park
  */
 public abstract class AbstractRenderable extends Closable {
     private final static Logger LOG = VoidOfBlue.getLogger(AbstractRenderable.class);

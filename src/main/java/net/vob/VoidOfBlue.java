@@ -15,8 +15,6 @@ import javax.swing.SwingUtilities;
 import net.vob.mods.ModpackManager;
 import net.vob.core.graphics.GraphicsEngine;
 import net.vob.core.graphics.WindowOptions;
-import net.vob.util.AbstractTree;
-import net.vob.util.ArrayTree;
 import net.vob.util.logging.Level;
 import net.vob.util.logging.LocaleUtils;
 import net.vob.util.math.AffineTransformation;
@@ -24,6 +22,9 @@ import net.vob.util.math.AffineTransformationImpl;
 import net.vob.util.math.Quaternion;
 import net.vob.util.math.Vector3;
 
+/**
+ * @author Lyn-Park
+ */
 public final class VoidOfBlue {
     private VoidOfBlue() {}
     
@@ -156,8 +157,6 @@ public final class VoidOfBlue {
             GraphicsEngine.MESSAGE_LOCK.unlock();
         }
         
-        // --- TESTBED END ---
-        
         while (getContinueExecution()) {
             Instant loopStartTime = Instant.now();
             GraphicsEngine.pollEvents();
@@ -176,6 +175,8 @@ public final class VoidOfBlue {
             setDeltaTime(Duration.between(loopStartTime, loopEndTime).toNanos() / 1e9d);
             setCurrentTime(Duration.between(startTime, loopEndTime).toNanos() / 1e9d);
         }
+        
+        // --- TESTBED END ---
     }
     
     private static void end() throws Throwable {

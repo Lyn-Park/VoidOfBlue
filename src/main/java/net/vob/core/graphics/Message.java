@@ -17,6 +17,8 @@ import org.lwjgl.opengl.GL43;
 /**
  * Messaging class. This class is used for communicating with the graphics thread, and
  * also contains a {@link Future} object for two-way communication.
+ * 
+ * @author Lyn-Park
  */
 final class Message {
     private final Type type;

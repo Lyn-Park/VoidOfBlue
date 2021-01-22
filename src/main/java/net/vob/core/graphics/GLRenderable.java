@@ -18,7 +18,8 @@ import org.lwjgl.opengl.GL43;
  * Container class for a mesh, array of textures, an affine transform, and a reference
  * to the shader program this renderable is using. Each renderable can take multiple
  * affine transformations; the number of these transforms indicates the number of
- * instances the renderable has.<p>
+ * instances the renderable has. Renderables also contain references to their current
+ * skeleton buffer objects, if they have one.<p>
  * 
  * On rendering, the mesh is checked if it is null or closed; if it is, no rendering
  * occurs. Otherwise, each texture is also checked in this way and bound, and the mesh
@@ -29,6 +30,8 @@ import org.lwjgl.opengl.GL43;
  * possibility that the program is not in a state conducive to rendering, and thus the
  * default shader program is currently bound instead. The program reference is merely
  * used by outside classes to locate this renderable in the rendering map.
+ * 
+ * @author Lyn-Park
  */
 final class GLRenderable extends Closable {
     static final Registry<GLRenderable> REGISTRY = new Registry<>();

@@ -16,14 +16,22 @@ import net.vob.util.logging.LocaleUtils;
 
 /**
  * Class for registries of objects, which are essentially one-to-one maps between
- * registered objects and their automatically generated integer key values.<p>
+ * registered objects and their automatically generated integer id values.<p>
  * 
  * Registries allow for quick, universal serialization to buffers and streams and 
  * then back again, assuming that the deserializing registry is in the same state 
- * (i.e. has the same object/integer mappings) as the serializing registry. Since
- * the integer key generation is non-random, 2 registries are guaranteed to have
- * the same state if the order in which entries were added/removed remains the
- * same.<p>
+ * (i.e. has the same object/integer mappings) as the serializing registry.
+ * Registries also allow for objects to be referenced by other areas of the code
+ * using the id value, rather than by exposing the object itself.<p>
+ * 
+ * Note that the id generation is performed by invoking {@link hashCode()} on the
+ * object to add, and then repeatedly checking for collisions. This means that it
+ * is <i>not</i> guaranteed that the generated id will be equivalent to the object's
+ * hash code; it is also <i>not</i> guaranteed that an object will be given the same
+ * key if it was removed and then re-added.<p>
+ * 
+ * Assuming that {@code hashCode()} returns consistent results (i.e. that it is not
+ * random), then 2 registries are guaranteed to 
  * 
  * Internally, a registry maintains 2 maps mapping between objects and integer 
  * keys; each map is the inverse of the other. This allows the registry to 
@@ -38,14 +46,13 @@ import net.vob.util.logging.LocaleUtils;
  * thus matching registry entries.
  * 
  * @param <T> The type of object this registry maintains
+ * @author Lyn-Park
  */
 public class Registry<T> implements Iterable<T> {
     private final TreeMap<Integer, T> int2Obj;
     private final Map<T, Integer> obj2Int;
     
     protected final ReentrantLock LOCK = new ReentrantLock();
-    
-    private int nextkey = 0;
     
     /**
      * Constructs an empty {@code Registry} with the specified initial capacity
@@ -86,7 +93,6 @@ public class Registry<T> implements Iterable<T> {
     public Registry(Registry<? extends T> registry) {
         int2Obj = new TreeMap<>(registry.int2Obj);
         obj2Int = new HashMap<>(registry.obj2Int);
-        nextkey = registry.nextkey;
     }
     
     /**
@@ -153,6 +159,7 @@ public class Registry<T> implements Iterable<T> {
             if (obj2Int.containsKey(obj))
                 return obj2Int.get(obj);
 
+            int nextkey = obj.hashCode() + 1;
             int k = nextkey - 1;
             while (int2Obj.containsKey(nextkey) && ++nextkey != k) {}
 
@@ -162,7 +169,7 @@ public class Registry<T> implements Iterable<T> {
             int2Obj.put(nextkey, obj);
             obj2Int.put(obj, nextkey);
 
-            return nextkey++;
+            return nextkey;
         } finally {
             LOCK.unlock();
         }
@@ -172,7 +179,7 @@ public class Registry<T> implements Iterable<T> {
      * Registers the given object to the registry. If the object has already been 
      * registered, removes the previous mapping and re-registers it.
      * @param obj The object to register
-     * @return The integer key the object was registered with
+     * @return The integer key the object was re-registered with
      * @throws NullPointerException if the given object is {@code null}
      * @throws IllegalStateException if the object was not previously registered
      * and the registry already contains 2^32 - 1 entries, and thus no suitable
@@ -242,7 +249,6 @@ public class Registry<T> implements Iterable<T> {
         try {
             int2Obj.clear();
             obj2Int.clear();
-            nextkey = 0;
             
         } finally {
             LOCK.unlock();

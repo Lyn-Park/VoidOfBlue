@@ -45,10 +45,12 @@ import java.util.function.Predicate;
  * </ul>
  * These 2 invariants together mean that 'empty' trees do not exist, as they have no
  * nodes and thus no root node; the closest to an empty tree that can be built
- * contains precisely 1 value for the root node.
+ * contains precisely 1 value for the root node, which is referred to as a
+ * <i>singleton</i> tree.
  * 
  * @param <E> the type of elements this {@code Tree} contains
  * @param <T> the type of the implementing class itself
+ * @author Lyn-Park
  */
 public interface Tree<E, T extends Tree<E, ? extends T>> {
     /**

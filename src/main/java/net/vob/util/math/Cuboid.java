@@ -6,6 +6,8 @@ import net.vob.util.logging.LocaleUtils;
  * Class for cuboids. A cuboid is defined by 6 double values, indicating the position
  * of the 6 sides of the cuboid. It also has width, height, depth, surface area and
  * volume, each of which have their standard mathematical definitions.
+ * 
+ * @author Lyn-Park
  */
 public final class Cuboid {
     private double xL, yL, zL, xH, yH, zH;

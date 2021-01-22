@@ -7,6 +7,8 @@ import java.util.logging.Logger;
 /**
  * This class augments a {@link Logger} object with the functionalities and
  * properties of an output stream of bytes.
+ * 
+ * @author Lyn-Park
  */
 @SuppressWarnings("NonConstantLogger")
 public class LoggerOutputStream extends OutputStream {

@@ -17,6 +17,8 @@ import java.util.function.Function;
  * 
  * Note that all methods here will throw a {@link NullPointerException} if a 
  * parameter expecting a {@code Tree} was passed {@code null}.
+ * 
+ * @author Lyn-Park
  */
 public final class Trees {
     private static <E> List<E> traverseTree(Iterator<? extends Tree<E, ?>> it) {

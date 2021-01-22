@@ -10,6 +10,8 @@ import java.util.concurrent.locks.ReentrantLock;
  * graphical rendering, and are converted to a 4x4 matrix form for this purpose.
  * All implementations of affine transformations should ensure thread-safety for all
  * public methods using a {@link ReentrantLock}.
+ * 
+ * @author Lyn-Park
  */
 public interface AffineTransformation {
     /**

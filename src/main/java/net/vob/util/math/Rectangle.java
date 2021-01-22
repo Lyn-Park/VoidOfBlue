@@ -6,6 +6,8 @@ import net.vob.util.logging.LocaleUtils;
  * Class for rectangles. A rectangle is defined by 4 double values, indicating the
  * position of the 4 sides of the rectangle. It also has width, height and area, which
  * have their standard mathematical definitions.
+ * 
+ * @author Lyn-Park
  */
 public final class Rectangle {
     private double xL, yL, xH, yH;

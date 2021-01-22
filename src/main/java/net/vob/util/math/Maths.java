@@ -7,6 +7,8 @@ import net.vob.util.logging.LocaleUtils;
  * A loose collection of utility methods that handle more basic mathematical and numeric
  * operations than {@link Math}, as well several operations regarding matrices and 
  * vectors.
+ * 
+ * @author Lyn-Park
  */
 public final class Maths {
     private Maths() {}

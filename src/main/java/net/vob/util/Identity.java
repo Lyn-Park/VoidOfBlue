@@ -33,6 +33,8 @@ import net.vob.util.logging.LocaleUtils;
  * {@code resources/main/asset/tile/data.json}.<p>
  * 
  * Note that the superid and id strings are converted to lowercase.
+ * 
+ * @author Lyn-Park
  */
 public class Identity {
     private static final Logger LOG = VoidOfBlue.getLogger(Identity.class);

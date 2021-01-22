@@ -10,6 +10,8 @@ import net.vob.util.math.AffineTransformationImpl;
  * An implementation class of {@link AbstractRenderable}. This class can take the
  * full range of inputs (instance number, mesh, shader, and a number of textures)
  * that a renderable can have.
+ * 
+ * @author Lyn-Park
  */
 public final class Renderable extends AbstractRenderable {
     public final AffineTransformation[] transforms;

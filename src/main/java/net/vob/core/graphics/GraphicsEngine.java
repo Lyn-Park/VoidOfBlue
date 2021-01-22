@@ -16,7 +16,6 @@ import net.vob.util.math.Vector2;
 import net.vob.util.math.Vector3;
 import net.vob.util.logging.LocaleUtils;
 import net.vob.util.math.AffineTransformation;
-import net.vob.core.ui.InputManager;
 import net.vob.util.Input;
 import net.vob.util.Tree;
 import net.vob.util.Trees;
@@ -105,6 +104,8 @@ import static org.lwjgl.glfw.GLFW.*;
  * </ul> 
  * <b>Warning: the manager cannot be reopened after being closed. Thus, only specific
  * external classes should attempt to close this manager.</b>
+ * 
+ * @author Lyn-Park
  */
 public final class GraphicsEngine {
     private GraphicsEngine() {}
@@ -240,25 +241,25 @@ public final class GraphicsEngine {
             cursorPos.setY(windowOptions.getWindowHeight() - ypos);
             
             Input input = new Input(Input.Source.MOUSE, cursorPos, 0, 0, 0);
-            InputManager.pushInputToRootUIElements(input);
+            
             // TODO - pass input to other areas
         });
         
         glfwSetMouseButtonCallback(window, (_window, button, action, mods) -> {
             Input input = new Input(Input.Source.MOUSE, cursorPos, button, 1, action);
-            InputManager.pushInputToRootUIElements(input);
+            
             // TODO - pass input to other areas
         });
         
         glfwSetKeyCallback(window, (_window, key, scancode, action, mods) -> {
             Input input = new Input(Input.Source.KEY, null, key, scancode, action);
-            InputManager.pushInputToFocusedUIElement(input);
+            
             // TODO - pass input to other areas
         });
         
         glfwSetCharCallback(window, (_window, codepoint) -> {
             Input input = new Input(Input.Source.CHAR, null, codepoint, 0, 0);
-            InputManager.pushInputToFocusedUIElement(input);
+            
             // TODO - pass input to other areas
         });
         
@@ -2118,10 +2119,12 @@ public final class GraphicsEngine {
         return enqueueMessage(new Message(Message.Type.RENDERABLE_SET_INSTANCE_TRANSFORM, transform.getAsUnmodifiable(true), instance));
     }
     
+    @Deprecated
     public static CompletableFuture<Integer> msgRenderableSetSkeleton(Tree<AffineTransformation, ?> skeleton, Matrix weights) {
         return enqueueMessage(new Message(Message.Type.RENDERABLE_SET_SKELETON, Trees.unmodifiableTree(skeleton), weights));
     }
     
+    @Deprecated
     public static CompletableFuture<Integer> msgRenderableRemoveSkeleton() {
         return enqueueMessage(new Message(Message.Type.RENDERABLE_REMOVE_SKELETON));
     }

@@ -3,6 +3,8 @@ package net.vob.util;
 /**
  * Basic abstract class for closable objects. This provides the basic methods for
  * closing the instance, as well as the ability to check if the instance is closed.
+ * 
+ * @author Lyn-Park
  */
 public abstract class Closable {
     private boolean closed = false;

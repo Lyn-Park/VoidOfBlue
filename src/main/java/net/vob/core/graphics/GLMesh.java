@@ -20,6 +20,8 @@ import org.lwjgl.opengl.GL31;
 /**
  * Collection of vertex attributes and triangles. Can be used on it's own for rendering,
  * or with bound shader programs and textures.
+ * 
+ * @author Lyn-Park
  */
 final class GLMesh extends GLObject {
     static final Registry<GLMesh> REGISTRY = new Registry<>();

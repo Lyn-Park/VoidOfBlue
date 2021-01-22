@@ -28,7 +28,10 @@ import net.vob.util.logging.LocaleUtils;
 /**
  * This class is used to search for, check, and load mods into the program, as
  * well as allowing access to their resources and information. Note that the
- * loading of mods can only occur a maximum of once in the program's lifetime.
+ * loading of mods can only occur a maximum of once in the program's lifetime; thus,
+ * reloading of mods will require the program to be restarted.
+ * 
+ * @author Lyn-Park
  */
 public final class ModpackManager {
     private ModpackManager() {}

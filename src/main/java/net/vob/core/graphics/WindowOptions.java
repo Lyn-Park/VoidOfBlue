@@ -6,6 +6,8 @@ import net.vob.util.math.Matrix;
 /**
  * Container class for the various window options. This includes the dimensions of
  * the window, the FOV, the Z-clipping planes, etc.
+ * 
+ * @author Lyn-Park
  */
 public final class WindowOptions {
     private int windowWidth, windowHeight, windowDepth;

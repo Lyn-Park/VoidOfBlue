@@ -22,9 +22,12 @@ import net.vob.util.math.Vector2;
  *      codepoint of the input character. All other parameters are either 0 or
  *      {@code null}.</li>
  *  <li>Otherwise, {@code source == }{@link Source#OTHER}, and the parameters can
- *      potentially take on any value. This source type should be used carefully, as
- *      it may cause conflicts and undesirable behaviour.</li>
+ *      potentially take on any value and meaning. This source type should be used
+ *      carefully, as the unknown nature of the parameters means this could lead to
+ *      unforeseen and undesirable behaviour.</li>
  * </ul>
+ * 
+ * @author Lyn-Park
  */
 public final class Input {
     public final Source source;

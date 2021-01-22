@@ -11,6 +11,8 @@ import net.vob.util.math.AffineTransformationImpl;
  * renderables that are part of the 2D user interface; as such, instances only take
  * a mesh and a single texture. The shader is locked to {@link Shader#DEFAULT_UI},
  * and the texture must be a diffuse (unit 0) texture.
+ * 
+ * @author Lyn-Park
  */
 public final class UIRenderable extends AbstractRenderable {
     /**

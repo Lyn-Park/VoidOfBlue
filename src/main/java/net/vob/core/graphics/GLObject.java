@@ -5,6 +5,8 @@ import net.vob.util.Closable;
 /**
  * Abstract class for a GL object. Provides a basic framework to build classes that
  * interface with the GPU around.
+ * 
+ * @author Lyn-Park
  */
 abstract class GLObject extends Closable {
     /**

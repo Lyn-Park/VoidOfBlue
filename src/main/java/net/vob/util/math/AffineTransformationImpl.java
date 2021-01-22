@@ -6,6 +6,8 @@ import net.vob.util.logging.LocaleUtils;
 /**
  * Implementation of {@link AffineTransformation} that uses internal vectors and
  * quaternions to encode transformations.
+ * 
+ * @author Lyn-Park
  */
 public class AffineTransformationImpl implements AffineTransformation {
     /**

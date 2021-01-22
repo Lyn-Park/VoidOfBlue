@@ -18,6 +18,8 @@ import org.lwjgl.opengl.GL31;
  * A special class, reserved specifically for skyboxes. This class combines the
  * functions of renderables and meshes into a single, static pipeline, with only
  * the single texture capable of being changed.
+ * 
+ * @author Lyn-Park
  */
 class GLSkybox extends GLObject {
     private static final float[] positions =    new float[] {

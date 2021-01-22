@@ -15,6 +15,8 @@ import net.vob.util.logging.LocaleUtils;
  * Container class for a graphical shader program. This is kept distinct from the
  * internal shader program objects in the graphics engine to promote decoupling between
  * the internal graphical state and the external program, as well as to prevent confusion.
+ * 
+ * @author Lyn-Park
  */
 public final class Shader extends Closable {
     private final Identity vertID, geomID, fragID;
