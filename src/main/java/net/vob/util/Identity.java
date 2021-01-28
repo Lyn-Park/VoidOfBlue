@@ -14,7 +14,7 @@ import java.util.logging.Logger;
 import javax.annotation.Nullable;
 import net.vob.VoidOfBlue;
 import net.vob.util.logging.Level;
-import net.vob.mods.ModpackManager;
+import net.vob.mods.ModManager;
 import net.vob.util.logging.LocaleUtils;
 
 /**
@@ -192,7 +192,7 @@ public class Identity {
         Enumeration<URL> urls;
         
         try {
-            urls = ModpackManager.getResources(path);
+            urls = ModManager.getResources(path);
         } catch (IOException e) {
             LOG.log(Level.FINER, LocaleUtils.format("Identity.ResourceURLException", path), e);
             return null;
@@ -284,7 +284,7 @@ public class Identity {
         Enumeration<URL> urls;
         
         try {
-            urls = ModpackManager.getResources(path);
+            urls = ModManager.getResources(path);
         } catch (IOException e) {
             LOG.log(Level.FINER, LocaleUtils.format("Identity.ResourceURLException", path), e);
             return null;
@@ -386,7 +386,7 @@ public class Identity {
         Enumeration<URL> urls;
         
         try {
-            urls = ModpackManager.getResources(path);
+            urls = ModManager.getResources(path);
         } catch (IOException e) {
             LOG.log(Level.FINER, LocaleUtils.format("Identity.ResourceURLException", path), e);
             return null;

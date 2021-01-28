@@ -4,6 +4,7 @@ import java.awt.image.BufferedImage;
 import java.util.concurrent.CompletableFuture;
 import net.vob.util.Identity;
 import net.vob.util.Tree;
+import net.vob.util.Trees;
 import net.vob.util.math.AffineTransformation;
 import net.vob.util.math.AffineTransformationImpl;
 import net.vob.util.math.Matrix;
@@ -34,7 +35,7 @@ final class Message {
     void handle() throws Throwable {
         AffineTransformation AFFINE_TRANSFORMATION;
         AffineTransformation[] AFFINE_TRANSFORMATION_ARR;
-        Tree<AffineTransformation, ?> AFFINE_TRANSFORMATION_TREE;
+        Tree<? extends AffineTransformation, ?> AFFINE_TRANSFORMATION_TREE;
         Matrix MATRIX;
         WindowOptions WINDOW_OPTIONS;
         Identity IDENTITY_0, IDENTITY_1, IDENTITY_2, IDENTITY_3, IDENTITY_4, IDENTITY_5;
@@ -583,15 +584,31 @@ final class Message {
                 break;
                 
             case RENDERABLE_SET_SKELETON:
-                AFFINE_TRANSFORMATION_TREE = (Tree<AffineTransformation, ?>)args[0];
+                AFFINE_TRANSFORMATION_TREE = (Tree<? extends AffineTransformation, ?>)args[0];
                 MATRIX = (Matrix)args[1];
                 
-                if (GraphicsManager.SELECTED_RENDERABLE == null || AFFINE_TRANSFORMATION_TREE == null || MATRIX == null)
+                if (GraphicsManager.SELECTED_RENDERABLE == null || AFFINE_TRANSFORMATION_TREE == null || MATRIX == null ||
+                    MATRIX.getNumRows() == 0 || MATRIX.getNumColumns() == 0)
                     o = null;
                 else {
-                    GraphicsManager.SELECTED_RENDERABLE.skeleton = AFFINE_TRANSFORMATION_TREE;
-                    GraphicsManager.SELECTED_RENDERABLE.weights = new Matrix(MATRIX);
-                    GraphicsManager.SELECTED_RENDERABLE.weights.readonly();
+                    MATRIX = new Matrix(MATRIX);
+                    
+                    for (int r = 0; r < MATRIX.getNumRows(); ++r) {
+                        double sum = 0;
+                        for (int c = 0; c < MATRIX.getNumColumns(); ++c)
+                            sum += MATRIX.getElement(r, c);
+
+                        if (sum == 0)
+                            o = null;
+
+                        for (int c = 0; c < MATRIX.getNumColumns(); ++c)
+                            MATRIX.setElement(r, c, MATRIX.getElement(r, c) / sum);
+                    }
+
+                    GraphicsManager.SELECTED_RENDERABLE.weights = MATRIX;
+                    GraphicsManager.SELECTED_RENDERABLE.weights.immutable();
+                    GraphicsManager.SELECTED_RENDERABLE.skeleton = Trees.unmodifiableTree(AFFINE_TRANSFORMATION_TREE);
+                    GraphicsManager.SELECTED_RENDERABLE.rebufferSkeletonBuffers();
                 }
                 break;
                 

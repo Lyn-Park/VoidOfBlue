@@ -21,7 +21,7 @@ import java.util.function.Function;
  * @author Lyn-Park
  */
 public final class Trees {
-    private static <E> List<E> traverseTree(Iterator<? extends Tree<E, ?>> it) {
+    private static <E> List<E> traverseTree(Iterator<? extends Tree<? extends E, ?>> it) {
         List<E> out = new ArrayList<>();
         while (it.hasNext())
             out.add(it.next().getValue());
@@ -41,7 +41,7 @@ public final class Trees {
      * breadth-first order
      * @throws NullPointerException if {@code tree} is {@code null}
      */
-    public static <E> List<E> toBreadthFirstList(Tree<E, ?> tree) {
+    public static <E> List<E> toBreadthFirstList(Tree<? extends E, ?> tree) {
         if (tree == null)
             throw new NullPointerException();
         
@@ -61,7 +61,7 @@ public final class Trees {
      * depth pre-order
      * @throws NullPointerException if {@code tree} is {@code null}
      */
-    public static <E> List<E> toPreOrderList(Tree<E, ?> tree) {
+    public static <E> List<E> toPreOrderList(Tree<? extends E, ?> tree) {
         if (tree == null)
             throw new NullPointerException();
         
@@ -81,7 +81,7 @@ public final class Trees {
      * depth post-order
      * @throws NullPointerException if {@code tree} is {@code null}
      */
-    public static <E> List<E> toPostOrderList(Tree<E, ?> tree) {
+    public static <E> List<E> toPostOrderList(Tree<? extends E, ?> tree) {
         if (tree == null)
             throw new NullPointerException();
         
@@ -91,7 +91,7 @@ public final class Trees {
     /**
      * Converts a generic tree to a {@link Set} of the contained values. All values in
      * the returned set are guaranteed to exist within the given tree (note that the set
-     * may <i>not</i> have the same size as the tree, as duplicate values are be discarded).
+     * may <i>not</i> have the same size as the tree, as duplicate values are discarded).
      * 
      * @see toBreadthFirstList(Tree)
      * @see toPreOrderList(Tree)
@@ -101,12 +101,12 @@ public final class Trees {
      * @return a {@link Set} containing all the values of the tree
      * @throws NullPointerException if {@code tree} is {@code null}
      */
-    public static <E> Set<E> toSet(Tree<E, ?> tree) {
+    public static <E> Set<E> toSet(Tree<? extends E, ?> tree) {
         if (tree == null)
             throw new NullPointerException();
         
         Set<E> out = new HashSet<>();
-        Iterator<? extends Tree<E, ?>> it = tree.breadthFirstWalk();
+        Iterator<? extends Tree<? extends E, ?>> it = tree.breadthFirstWalk();
         while (it.hasNext())
             out.add(it.next().getValue());
         return out;
@@ -133,7 +133,7 @@ public final class Trees {
      * @return an {@link UnmodifiableTree} conversion of {@code tree}
      * @throws NullPointerException if {@code tree} is {@code null}
      */
-    public static <E> UnmodifiableTree<E> unmodifiableTree(Tree<E, ?> tree) {
+    public static <E> UnmodifiableTree<E> unmodifiableTree(Tree<? extends E, ?> tree) {
         if (tree == null)
             throw new NullPointerException();
         
@@ -162,18 +162,18 @@ public final class Trees {
             this.parent = null;
         }
         
-        UnmodifiableTree(Tree<E, ?> wrapped) {
+        UnmodifiableTree(Tree<? extends E, ?> wrapped) {
             this(wrapped, null);
         }
         
-        private UnmodifiableTree(Tree<E, ?> wrapped, UnmodifiableTree<E> parent) {
+        private UnmodifiableTree(Tree<? extends E, ?> wrapped, UnmodifiableTree<E> parent) {
             this.value = wrapped.getValue();
             this.parent = parent;
             
             this.children = new UnmodifiableTree[wrapped.degree()];
             
             int i = 0;
-            Iterator<? extends Tree<E, ?>> it = wrapped.childLikeWalk();
+            Iterator<? extends Tree<? extends E, ?>> it = wrapped.childLikeWalk();
             while (it.hasNext())
                 children[i++] = new UnmodifiableTree<>(it.next(), this);
         }
@@ -199,7 +199,7 @@ public final class Trees {
             
             Iterator<UnmodifiableTree<E>> it = childLikeWalk();
             while (it.hasNext())
-                tree.add(it.next().map(mapper));
+                tree.add(new ArrayTree<>(it.next().map(mapper)));
             
             return new UnmodifiableTree<>(tree);
         }

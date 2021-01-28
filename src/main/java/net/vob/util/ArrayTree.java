@@ -53,6 +53,29 @@ public class ArrayTree<E> extends AbstractTree<E> {
         this.children = new ArrayTree[initialSize];
     }
     
+    /**
+     * The copy constructor. The new {@code ArrayTree} is guaranteed to contain the
+     * exact same structure and values as the given tree. Note that the values are only
+     * shallow-copied to the new tree. Also note that the new tree can only make as much
+     * of a guarantee on its structure as the given tree does (e.g. the ordering of the
+     * children).
+     * 
+     * @param tree the tree to copy
+     */
+    @SuppressWarnings("LeakingThisInConstructor")
+    public ArrayTree(Tree<? extends E, ?> tree) {
+        this.value = tree.getValue();
+        this.children = new ArrayTree[tree.degree()];
+        
+        Iterator<? extends Tree<? extends E, ?>> it = tree.childLikeWalk();
+        int i = 0;
+        
+        while (it.hasNext()) {
+            this.children[i] = new ArrayTree<>(it.next());
+            this.children[i++].parent = this;
+        }
+    }
+    
     private int getIndexOfChild(ArrayTree<E> child) {
         for (int i = 0; i < children.length; ++i)
             if (children[i] == child)

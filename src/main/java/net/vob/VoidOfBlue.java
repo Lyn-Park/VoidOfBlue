@@ -12,14 +12,19 @@ import java.util.logging.LogManager;
 import java.util.logging.Logger;
 import javafx.embed.swing.JFXPanel;
 import javax.swing.SwingUtilities;
-import net.vob.mods.ModpackManager;
+import net.vob.mods.ModManager;
 import net.vob.core.graphics.GraphicsEngine;
 import net.vob.core.graphics.WindowOptions;
+import net.vob.util.ArrayTree;
+import net.vob.util.Tree;
 import net.vob.util.logging.Level;
 import net.vob.util.logging.LocaleUtils;
 import net.vob.util.math.AffineTransformation;
 import net.vob.util.math.AffineTransformationImpl;
+import net.vob.util.math.Maths;
+import net.vob.util.math.Matrix;
 import net.vob.util.math.Quaternion;
+import net.vob.util.math.Vector;
 import net.vob.util.math.Vector3;
 
 /**
@@ -112,7 +117,7 @@ public final class VoidOfBlue {
         
         GraphicsEngine.init(new WindowOptions(800, 640, 100, 80.0f, 0.1f, 100f), 10);
         
-        ModpackManager.loadModFiles();
+        ModManager.loadModFiles();
         latch.await();
     }
     
@@ -122,7 +127,22 @@ public final class VoidOfBlue {
         
         AffineTransformation camera = new AffineTransformationImpl(),
                                   t1 = new AffineTransformationImpl(),
-                                  t2 = new AffineTransformationImpl();
+                                  t2 = new AffineTransformationImpl(),
+                                  b1 = new AffineTransformationImpl(),
+                                  b2 = new AffineTransformationImpl();
+        
+        Matrix weights = Maths.packVectorsToMatrixHorizontal(new Vector(1, 0, 0),
+                                                              new Vector(1, 0, 0),
+                                                              new Vector(0, 1, 0),
+                                                              new Vector(0, 2, 1),
+                                                              new Vector(0, 1, 2),
+                                                              new Vector(0, 0, 1),
+                                                              new Vector(1, 0, 0),
+                                                              new Vector(1, 0, 0));
+        
+        ArrayTree<AffineTransformation> skeleton = new ArrayTree<>(new AffineTransformationImpl());
+        skeleton.add(b1);
+        skeleton.add(b2);
         
         GraphicsEngine.MESSAGE_LOCK.lock();
         try {
@@ -149,6 +169,7 @@ public final class VoidOfBlue {
             GraphicsEngine.msgShaderProgramAssignRenderable();
             
             GraphicsEngine.msgRenderableSetInstanceTransform(t2, 0);
+            GraphicsEngine.msgRenderableAttachSkeleton(skeleton, weights);
             
             t1.setTranslation(new Vector3(1, 0, 0));
             t2.setTranslation(new Vector3(-1, 0, 0));
@@ -163,11 +184,12 @@ public final class VoidOfBlue {
             
             // ------------------------------------------------- //
             
-            double s = Math.sin(getCurrentTime() / 3d) * 3;
-            double c = Math.cos(getCurrentTime() / 3d) * 3;
+            double s = Math.sin(getCurrentTime() / 3d) * 1.5d;
+            double c = Math.cos(getCurrentTime() / 3d) * 1.5d;
             
-            camera.setTranslation(new Vector3(s, 0, -c));
-            camera.setRotation(Quaternion.rotationQuaternion(Vector3.DOWN, getCurrentTime() / 3d)).appendRotation(Quaternion.POS_Y);
+            camera.setTranslation(Vector3.FORWARD.mul(2));
+            b1.setRotation(Quaternion.rotationQuaternion(Vector3.BACKWARD, s));
+            b2.setRotation(Quaternion.rotationQuaternion(Vector3.BACKWARD, c));
             
             // ------------------------------------------------- //
             

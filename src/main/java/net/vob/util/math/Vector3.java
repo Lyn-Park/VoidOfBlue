@@ -26,14 +26,14 @@ public final class Vector3 extends Vector {
     public static final Vector3 ONES =     new Vector3(1, 1, 1);
     
     static {
-        ZERO.readonly();
-        RIGHT.readonly();
-        LEFT.readonly();
-        UP.readonly();
-        DOWN.readonly();
-        FORWARD.readonly();
-        BACKWARD.readonly();
-        ONES.readonly();
+        ZERO.immutable();
+        RIGHT.immutable();
+        LEFT.immutable();
+        UP.immutable();
+        DOWN.immutable();
+        FORWARD.immutable();
+        BACKWARD.immutable();
+        ONES.immutable();
     }
     
     /**

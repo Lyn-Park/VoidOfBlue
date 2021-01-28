@@ -3,6 +3,7 @@ package net.vob.core.graphics;
 import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
 import java.util.Iterator;
+import net.vob.util.ArrayTree;
 import net.vob.util.Closable;
 import net.vob.util.Registry;
 import net.vob.util.Tree;
@@ -21,10 +22,33 @@ import org.lwjgl.opengl.GL43;
  * instances the renderable has. Renderables also contain references to their current
  * skeleton buffer objects, if they have one.<p>
  * 
- * On rendering, the mesh is checked if it is null or closed; if it is, no rendering
- * occurs. Otherwise, each texture is also checked in this way and bound, and the mesh
- * is rendered. The affine transforms are also combined with the global projection-view
- * matrix and buffered to the appropriate buffer.<p>
+ * When this renderable is rendered using {@link render(GLShaderProgram)}, the mesh,
+ * skeleton, and textures are checked for validity; if the mesh is invalid, then it is
+ * reverted to a previous valid state; if the skeleton/weights are invalid, they are
+ * removed; if a texture is invalid, then that texture is removed from the renderable
+ * (as a special case, an invalid diffuse texture will instead be replaced with the
+ * default texture). Otherwise, the textures are bound and the mesh is rendered; the
+ * affine transforms for each instance are also combined with the global projection-view
+ * matrix to form a complete projection-view-model matrix, and buffered.<p>
+ * 
+ * Skeletons are buffered to a Shader Storage Buffer Object (SSBO) such that each bone in
+ * the skeleton is in <i>model</i> space rather than relative space (this means each bone
+ * is combined with its parent prior to buffering). The weights are also buffered to a
+ * separate SSBO in row-major order, along with the size of the weight matrix (each row of
+ * the matrix corresponds to a vertex, and each column corresponds to a skeleton bone) Thus,
+ * the formats of the buffer objects in the shader are expected to be:
+ * <blockquote><pre>
+ *      <b>{@code skeleton}</b> {@code : mat4[] bones;}
+ *      <b>{@code weights}</b> {@code : uint rows;
+ *                  uint columns;
+ *                  float[] weights;}
+ * </pre></blockquote><p>
+ * 
+ * Once the skeleton and weights are bound, it is the responsibility of the shader to
+ * handle the skeleton and vertices as required. If no skeleton or weight is bound to this
+ * renderable, then the buffer objects are instead bound to
+ * {@link GraphicsManager#SHADER_STORAGE_BUFFER_OBJECT_ZERO}; this allows the weights to
+ * be used for checking if a skeleton is present, as it will have a row count of 0.<p>
  * 
  * Note that the shader program reference is not used for rendering; this is due to the
  * possibility that the program is not in a state conducive to rendering, and thus the
@@ -36,7 +60,7 @@ import org.lwjgl.opengl.GL43;
 final class GLRenderable extends Closable {
     static final Registry<GLRenderable> REGISTRY = new Registry<>();
     
-    private static int skeletonSSBO, weightSSBO;
+    private static int skeletonSSBO = 0, weightSSBO = 0;
     
     Tree<AffineTransformation, ?> skeleton = null;
     Matrix weights = null;
@@ -99,29 +123,33 @@ final class GLRenderable extends Closable {
      * Rebuffers the skeleton uniform buffers. Deletes the old buffers, if they
      * exist.
      */
-    private void rebufferSkeletonBuffers() {
+    void rebufferSkeletonBuffers() {
         GL15.glBindBuffer(GL43.GL_SHADER_STORAGE_BUFFER, 0);
-        GL15.glDeleteBuffers(skeletonSSBO);
-        GL15.glDeleteBuffers(weightSSBO);
+        if (skeletonSSBO > 0) {
+            closeSkeletonSSBO();
+        }
         
         FloatBuffer mBuf = BufferUtils.createFloatBuffer(skeleton.size() * 16);
         
-        Tree<Matrix, ?> matTree = skeleton.map((t) -> t.getTransformationMatrix());
-        Iterator<? extends Tree<Matrix, ?>> it = matTree.preOrderWalk();
+        Tree<Matrix, ?> baseMatrixTree = new ArrayTree<>(skeleton.map((t) -> t.getTransformationMatrix()));
+        Iterator<? extends Tree<Matrix, ?>> bmtIt = baseMatrixTree.preOrderWalk();
         
-        it.next().getValue().writeToBuffer(mBuf, false);
-        while (it.hasNext()) {
-            Tree<Matrix, ?> tree = it.next();
-            tree.setValue(tree.getValue().mul(tree.getParent().getValue()));
+        Tree<Matrix, ?> bone = bmtIt.next();
+        bone.getValue().writeToFloatBuffer(mBuf, true);
+        
+        while (bmtIt.hasNext()) {
+            bone = bmtIt.next();
+            Matrix boneMat = bone.getValue().mul(bone.getParent().getValue());
             
-            tree.getValue().writeToBuffer(mBuf, false);
+            boneMat.writeToFloatBuffer(mBuf, true);
+            bone.setValue(boneMat);
         }
         mBuf.flip();
         
         ByteBuffer wBuf = BufferUtils.createByteBuffer((2 * Integer.BYTES) + (weights.getElements().length * Float.BYTES));
         wBuf.putInt(weights.getNumRows());
         wBuf.putInt(weights.getNumColumns());
-        weights.writeToBuffer(mBuf, false);
+        weights.writeToFloatBuffer(wBuf, false);
         wBuf.flip();
         
         skeletonSSBO = GL15.glGenBuffers();
@@ -131,6 +159,49 @@ final class GLRenderable extends Closable {
         weightSSBO = GL15.glGenBuffers();
         GL15.glBindBuffer(GL43.GL_SHADER_STORAGE_BUFFER, weightSSBO);
         GL15.glBufferData(GL43.GL_SHADER_STORAGE_BUFFER, wBuf, GL15.GL_DYNAMIC_DRAW);
+        GL15.glBindBuffer(GL43.GL_SHADER_STORAGE_BUFFER, 0);
+    }
+    
+    /**
+     * Updates the transformation matrices for the skeleton. Does not delete the
+     * current buffer, it only overwrites the current values in the buffer.
+     */
+    private void updateSkeletonBuffer() {
+        Iterator<? extends Tree<AffineTransformation, ?>> skeletonIt = skeleton.preOrderWalk();
+        int i = 0;
+        
+        GL15.glBindBuffer(GL43.GL_SHADER_STORAGE_BUFFER, skeletonSSBO);
+        
+        while (skeletonIt.hasNext()) {
+            Tree<AffineTransformation, ?> bone = skeletonIt.next();
+            
+            if (bone.getValue().isDirty()) {
+                int j = i;
+                
+                Tree<Matrix, ?> matrixTree = bone.map((transform) -> transform.getTransformationMatrix());
+                Iterator<? extends Tree<Matrix, ?>> matrixIt = matrixTree.preOrderWalk();
+                matrixIt.next();
+                
+                while (matrixIt.hasNext()) {
+                    Tree<Matrix, ?> next = matrixIt.next();
+                    next.setValue(next.getValue().mul(next.getParent().getValue()));
+                    
+                    skeletonIt.next();
+                    ++i;
+                }
+                
+                matrixIt = matrixTree.preOrderWalk();
+                FloatBuffer buf = BufferUtils.createFloatBuffer(bone.size() * 16);
+                while (matrixIt.hasNext())
+                    matrixIt.next().getValue().writeToFloatBuffer(buf, true);
+                buf.flip();
+                
+                GL15.glBufferSubData(GL43.GL_SHADER_STORAGE_BUFFER, j * 16 * Float.BYTES, buf);
+            }
+            
+            ++i;
+        }
+        
         GL15.glBindBuffer(GL43.GL_SHADER_STORAGE_BUFFER, 0);
     }
     
@@ -155,8 +226,8 @@ final class GLRenderable extends Closable {
         
         FloatBuffer buf = GraphicsManager.getInstanceMatrixBuffer(1);
         
-        model.writeToBuffer(buf, true);
-        projectionViewModel.writeToBuffer(buf, true);
+        model.writeToFloatBuffer(buf, true);
+        projectionViewModel.writeToFloatBuffer(buf, true);
         buf.flip();
         
         GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, ivbo);
@@ -170,7 +241,7 @@ final class GLRenderable extends Closable {
      * in the buffer.
      */
     private void updateProjViewMatrices() {
-        FloatBuffer buf = BufferUtils.createFloatBuffer(GraphicsManager.NUM_PROJECTION_VIEW_MODEL_MATRIX_ROWS_PER_INSTANCE * GraphicsManager.NUM_PROJECTION_VIEW_MODEL_MATRIX_ROWS_PER_INSTANCE);
+        FloatBuffer buf = BufferUtils.createFloatBuffer(16);
         
         GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, ivbo);
         
@@ -186,7 +257,7 @@ final class GLRenderable extends Closable {
 
             Matrix projectionViewModel = GraphicsManager.PROJ_VIEW_MATRIX.mul(model);
             
-            projectionViewModel.writeToBuffer(buf, true);
+            projectionViewModel.writeToFloatBuffer(buf, true);
             buf.flip();
             GL15.glBufferSubData(GL15.GL_ARRAY_BUFFER, GraphicsManager.INSTANCE_PROJECTION_VIEW_MODEL_MATRIX_OFFSET + (i * GraphicsManager.INSTANCE_STRIDE), buf);
             buf.clear();
@@ -209,8 +280,8 @@ final class GLRenderable extends Closable {
         if (instanceTransforms == null) {
             Matrix I = Matrix.identity(4);
             for (int i = 0; i < instanceTransforms.length; ++i) {
-                I.writeToBuffer(mBuf, true);
-                GraphicsManager.PROJ_VIEW_MATRIX.writeToBuffer(mBuf, true);
+                I.writeToFloatBuffer(mBuf, true);
+                GraphicsManager.PROJ_VIEW_MATRIX.writeToFloatBuffer(mBuf, true);
             }
         }
         else
@@ -226,8 +297,8 @@ final class GLRenderable extends Closable {
 
                 Matrix projectionViewModel = GraphicsManager.PROJ_VIEW_MATRIX.mul(model);
 
-                model.writeToBuffer(mBuf, true);
-                projectionViewModel.writeToBuffer(mBuf, true);
+                model.writeToFloatBuffer(mBuf, true);
+                projectionViewModel.writeToFloatBuffer(mBuf, true);
             }
         }
         mBuf.flip();
@@ -268,18 +339,19 @@ final class GLRenderable extends Closable {
                 mesh = null;
             
             else {
-                if(!checkSkeleton()) {
+                if (skeleton != null && !checkSkeleton()) {
                     skeleton = null;
                     weights = null;
+                    closeSkeletonSSBO();
                 }
                 
                 if (skeleton != null) {
-                    rebufferSkeletonBuffers();
+                    updateSkeletonBuffer();
                     program.bindShaderStorage(skeletonSSBO, GraphicsManager.SHADER_UNIFORM_SKELETON_TRANSFORMS_NAME);
                     program.bindShaderStorage(weightSSBO, GraphicsManager.SHADER_UNIFORM_SKELETON_WEIGHTS_NAME);
                 } else {
-                    program.bindShaderStorage(0, GraphicsManager.SHADER_UNIFORM_SKELETON_TRANSFORMS_NAME);
-                    program.bindShaderStorage(0, GraphicsManager.SHADER_UNIFORM_SKELETON_WEIGHTS_NAME);
+                    program.bindShaderStorage(GraphicsManager.SHADER_STORAGE_BUFFER_OBJECT_ZERO, GraphicsManager.SHADER_UNIFORM_SKELETON_TRANSFORMS_NAME);
+                    program.bindShaderStorage(GraphicsManager.SHADER_STORAGE_BUFFER_OBJECT_ZERO, GraphicsManager.SHADER_UNIFORM_SKELETON_WEIGHTS_NAME);
                 }
                 
                 // update or rebuffer the instance buffer
@@ -311,6 +383,9 @@ final class GLRenderable extends Closable {
                 for (GLTexture texture : textures)
                     if (texture != null) texture.unbind();
 
+                program.bindShaderStorage(0, GraphicsManager.SHADER_UNIFORM_SKELETON_TRANSFORMS_NAME);
+                program.bindShaderStorage(0, GraphicsManager.SHADER_UNIFORM_SKELETON_WEIGHTS_NAME);
+                
                 return e;
             }
         }
@@ -322,11 +397,13 @@ final class GLRenderable extends Closable {
     protected boolean doClose() {
         GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, 0);
         GL15.glDeleteBuffers(ivbo);
-        
+        closeSkeletonSSBO();
+        return true;
+    }
+    
+    private void closeSkeletonSSBO() {
         GL15.glBindBuffer(GL43.GL_SHADER_STORAGE_BUFFER, 0);
         GL15.glDeleteBuffers(skeletonSSBO);
         GL15.glDeleteBuffers(weightSSBO);
-        
-        return true;
     }
 }

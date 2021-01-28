@@ -22,12 +22,12 @@ public final class Vector2 extends Vector {
     public static final Vector2 ONES = new Vector2(1, 1);
     
     static {
-        ZERO.readonly();
-        RIGHT.readonly();
-        LEFT.readonly();
-        UP.readonly();
-        DOWN.readonly();
-        ONES.readonly();
+        ZERO.immutable();
+        RIGHT.immutable();
+        LEFT.immutable();
+        UP.immutable();
+        DOWN.immutable();
+        ONES.immutable();
     }
     
     /**

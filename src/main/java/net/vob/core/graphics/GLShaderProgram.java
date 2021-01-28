@@ -251,7 +251,7 @@ final class GLShaderProgram extends GLObject {
      */
     void uniformMatrix4(Matrix mat, String name) {
         if (PROGRAM_RESOURCES.containsKey(name)) {
-            mat.writeToBuffer(MATRIX_BUFFER, false);
+            mat.writeToFloatBuffer(MATRIX_BUFFER, false);
             MATRIX_BUFFER.flip();
             GL20.glUniformMatrix4fv(PROGRAM_RESOURCES.get(name), true, MATRIX_BUFFER);
             MATRIX_BUFFER.clear();

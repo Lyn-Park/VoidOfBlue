@@ -63,13 +63,13 @@ import static org.lwjgl.glfw.GLFW.*;
  * relations between objects, and serves to simplify the operation of the
  * {@code GraphicsManager} and the rendering loop. The hierarchy is as follows:
  * <blockquote><pre>
- *                     <b>Mesh</b> (single)     (multiple renderables        <b>Vertex Shader</b> (mandatory)
- *                        \u2198                   per program)             \u2199
- *      <b>2D Texture</b>      <b>Renderable Object</b>      \u27a1     <b>Shader Program</b> \u2b05 <b>Geometry Shader</b> (optional)
- *              \u2198         \u2197                                            \u2196
- *               <b>Textures</b> (multiple textures                          <b>Fragment Shader</b> (mandatory)
- *              \u2197            per renderable)
- * <b>Cubemap Texture</b>
+ *                      <b>Mesh</b>              (multiple renderables        <b>Vertex Shader</b> (mandatory)
+ *                         \u2198                   per program)             \u2199
+ *      <b>2D Texture</b>       <b>Renderable Object</b>      \u27a1     <b>Shader Program</b> \u2b05 <b>Geometry Shader</b> (optional)
+ *              \u2198         \u2197                                             \u2196
+ *               <b>Textures</b>                                              <b>Fragment Shader</b> (mandatory)
+ *              \u2197     (multiple textures
+ * <b>Cubemap Texture</b>    per renderable)
  * </pre></blockquote>
  * External threads and classes must use the messaging functions this class provides to
  * communicate with the graphics thread, and build up the desired object(s) as needed. For
@@ -85,13 +85,19 @@ import static org.lwjgl.glfw.GLFW.*;
  * thread through the messaging system. This is the complete list of them:
  * <ul>
  *  <li>The <i>skybox</i>; a singleton object that is independent of the surrounding
- * classes and systems, specializing in rendering the background sky texture.</li>
+ * classes and systems, which is specialized towards rendering the background sky texture.</li>
  *  <li>The <i>UI system</i>; a special system for 2D UI renderables, which guarantees that
- * renderables will be drawn on top of the rest of the scene without being occluded.</li>
+ * renderables within it will be drawn on top of the rest of the scene without being
+ * occluded.</li>
  *  <li>Renderable <i>instances</i>; a parameter that allows for the GPU to render multiple
  * copies of the same renderable with a single rendering call, which can speed up rendering
  * in cases where large numbers of the same renderable must be drawn at once; e.g. grass or
  * leaves.</li>
+ *  <li>Renderable <i>skeletons</i>; a special system to allow individual vertices of a
+ * renderable's mesh to be offset according to some number of affine transformation 'bones',
+ * alongside a weighted mapping of vertices to bones. This allows the graphics engine to
+ * perform animations via manipulation of the bones, without needing to change or alter the
+ * meshes.</li>
  * </ul>
  * <b>Note:</b>
  * <ul>
@@ -101,6 +107,10 @@ import static org.lwjgl.glfw.GLFW.*;
  * function, relies on the dirty flags of these transformations to know when to update the
  * GPU buffers; thus, outside threads should take care when calling one of the
  * transformation matrix methods of these instances, as that will clear the dirty flag.</li>
+ *  <li>Renderable instances share <i>everything</i> except for their origin point
+ * transformation; this includes meshes, textures, shaders and skeleton transformations. If
+ * any of these are required or expected to be independent of one another, then users should
+ * be using separate renderables instead of instances.</li>
  * </ul> 
  * <b>Warning: the manager cannot be reopened after being closed. Thus, only specific
  * external classes should attempt to close this manager.</b>
@@ -2119,12 +2129,79 @@ public final class GraphicsEngine {
         return enqueueMessage(new Message(Message.Type.RENDERABLE_SET_INSTANCE_TRANSFORM, transform.getAsUnmodifiable(true), instance));
     }
     
-    @Deprecated
-    public static CompletableFuture<Integer> msgRenderableSetSkeleton(Tree<AffineTransformation, ?> skeleton, Matrix weights) {
-        return enqueueMessage(new Message(Message.Type.RENDERABLE_SET_SKELETON, Trees.unmodifiableTree(skeleton), weights));
+    /**
+     * Sets the current skeleton and weight matrix of the currently selected renderable.
+     * Removes the previous skeleton, if any.<p>
+     * 
+     * The skeleton of a renderable is defined to be a tree of affine transformations
+     * representing the 'bones' of the skeleton. These bones dictate how each vertex in the
+     * current mesh should be transformed relative to the parent bone. Each vertex in the
+     * renderable's mesh is also assigned a series of 'weights' via the given matrix, which
+     * are used to create a weighted map between vertices and bones (e.g. a vertex on a joint
+     * may be under equal influence from both bones of the joint, and thus would have each
+     * corresponding weight set to 0.5). The weights are normalized so that each row sums to
+     * 1 prior to rendering.<p>
+     * 
+     * This method thus allows meshes and renderables to be used for animation purposes.
+     * However, the exact method of combining the skeleton, weights and vertices together
+     * is left up to the renderable's current shader to perform. For reference, the
+     * graphics engine combines each skeleton transformation with it's parent <i>prior</i>
+     * to uploading to the GPU, and the weights are uploaded in row-major order.<p>
+     * 
+     * The skeleton and weights will be automatically removed from the renderable during
+     * <i>any</i> rendering cycle if the weight matrix is determined to be of invalid size
+     * (the weights must have an equal number of columns as the size of the skeleton tree,
+     * <i>and</i> an equal number of rows as the number of vertices in the current mesh), but
+     * will not cause the returned {@link CompletableFuture} from this method to be
+     * cancelled. This is due to the fact that the renderable's mesh can change at any time,
+     * and the graphics engine must handle this case gracefully. In addition, the tree is set
+     * to be unmodifiable via {@link Trees#unmodifiableTree(Tree)} and the matrix is copied,
+     * so the weights and the structure of the skeleton cannot be altered.<p>
+     * 
+     * Note that this method communicates with the graphics thread, so it may have to
+     * wait for space in the message queue. In addition, the returned
+     * {@link CompletableFuture} should not be completed outside of the graphics thread.
+     * 
+     * @param skeleton the tree of affine transformation bones to use as the new skeleton
+     * @param weights the vertex-bone weights of the new skeleton. Each row of the weights
+     * corresponds to a vertex within the renderable's mesh, and each column of weights
+     * corresponds to a bone within the skeleton, where the bones are ordered using a
+     * {@linkplain Tree#preOrderWalk() pre-order walk}
+     * @return a {@link CompletableFuture} object that completes with a value of 0
+     * on success, or is cancelled if:
+     * <ul>
+     *  <li>the thread experienced an {@link InterruptedException} while
+     * waiting for space in the message queue</li>
+     *  <li>the currently selected renderable is {@code null}</li>
+     *  <li>{@code skeleton} is {@code null}</li>
+     *  <li>{@code weights} is {@code null}</li>
+     *  <li>{@code weights} is an empty matrix (i.e. it has either 0 rows or 0 columns)</li>
+     * </ul>
+     * @throws IllegalStateException if the manager has not been initialized, i.e. the
+     * {@link STATUS_INITIALIZED} status flag is not set
+     */
+    public static CompletableFuture<Integer> msgRenderableAttachSkeleton(Tree<? extends AffineTransformation, ?> skeleton, Matrix weights) {
+        return enqueueMessage(new Message(Message.Type.RENDERABLE_SET_SKELETON, skeleton, weights));
     }
     
-    @Deprecated
+    /**
+     * Removes the current skeleton and weight matrix (if any) from the currently
+     * selected renderable.<p>
+     * 
+     * Note that this method communicates with the graphics thread, so it may have to
+     * wait for space in the message queue. In addition, the returned
+     * {@link CompletableFuture} should not be completed outside of the graphics thread.
+     * 
+     * @return a {@link CompletableFuture} object that completes with a value of 0
+     * on success, or is cancelled if:
+     * <ul>
+     *  <li>the thread experienced an {@link InterruptedException} while
+     * waiting for space in the message queue</li>
+     *  <li>the currently selected renderable is {@code null}</li>
+     * </ul>
+     * @throws IllegalStateException if the manager has not been initialized, i.e. the
+     * {@link STATUS_INITIALIZED} status flag is not set
+     */
     public static CompletableFuture<Integer> msgRenderableRemoveSkeleton() {
         return enqueueMessage(new Message(Message.Type.RENDERABLE_REMOVE_SKELETON));
     }

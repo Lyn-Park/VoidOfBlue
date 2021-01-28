@@ -33,10 +33,10 @@ import net.vob.util.logging.LocaleUtils;
  * 
  * @author Lyn-Park
  */
-public final class ModpackManager {
-    private ModpackManager() {}
+public final class ModManager {
+    private ModManager() {}
     
-    private static final Logger LOG = VoidOfBlue.getLogger(ModpackManager.class);
+    private static final Logger LOG = VoidOfBlue.getLogger(ModManager.class);
     
     private static URLClassLoader LOADER = buildClassLoader(new URL[0]);
     private static boolean modsLoaded = false;

@@ -8,8 +8,9 @@ import java.util.concurrent.locks.ReentrantLock;
  * Affine transformations are the types of transformations that provide translation,
  * rotation and scaling operations within a 3D space. They are primarily used for
  * graphical rendering, and are converted to a 4x4 matrix form for this purpose.
- * All implementations of affine transformations should ensure thread-safety for all
- * public methods using a {@link ReentrantLock}.
+ * All implementations of affine transformations should therefore ensure
+ * thread-safety for all public methods using the returned {@link ReentrantLock}
+ * from {@link getLock()}.
  * 
  * @author Lyn-Park
  */

@@ -1,5 +1,6 @@
 package net.vob.util.math;
 
+import java.nio.ByteBuffer;
 import java.nio.DoubleBuffer;
 import java.nio.FloatBuffer;
 import java.util.Arrays;
@@ -13,7 +14,7 @@ import net.vob.util.logging.LocaleUtils;
 public class Matrix {
     protected final int rows, columns;
     protected final double[] elements;
-    private boolean readonly;
+    private boolean immutable;
     
     /**
      * Constructs an empty square matrix of the given size.
@@ -55,7 +56,7 @@ public class Matrix {
         this.rows = rows;
         this.columns = columns;
         this.elements = elements;
-        this.readonly = immutable;
+        this.immutable = immutable;
     }
     
     /**
@@ -65,8 +66,8 @@ public class Matrix {
      * Also note that this immutability only affects {@link setElement(int, int, double)};
      * all other operations function as normal.
      */
-    public void readonly() {
-        readonly = true;
+    public void immutable() {
+        immutable = true;
     }
     
     /**
@@ -96,7 +97,7 @@ public class Matrix {
      * @throws IllegalStateException if this matrix is read-only
      */
     public void setElement(int row, int column, double value) {
-        if (readonly)
+        if (immutable)
             throw new IllegalStateException(LocaleUtils.format("global.Exception.Readonly", "Matrix"));
         
         elements[column + (row * columns)] = value;
@@ -442,7 +443,7 @@ public class Matrix {
      * @param transpose {@code false} if the matrix should be written to the
      * buffer in row-major order, or {@code true} for column-major order
      */
-    public void writeToBuffer(DoubleBuffer buf, boolean transpose) {
+    public void writeToDoubleBuffer(DoubleBuffer buf, boolean transpose) {
         if (transpose)
             for (int j = 0; j < columns; ++j)
                 for (int i = 0; i < rows; i++)
@@ -467,7 +468,7 @@ public class Matrix {
      * @param transpose {@code false} if the matrix should be written to the
      * buffer in row-major order, or {@code true} for column-major order
      */
-    public void writeToBuffer(FloatBuffer buf, boolean transpose) {
+    public void writeToFloatBuffer(FloatBuffer buf, boolean transpose) {
         if (transpose)
             for (int j = 0; j < columns; ++j)
                 for (int i = 0; i < rows; i++)
@@ -477,6 +478,56 @@ public class Matrix {
             for (int i = 0; i < rows; ++i)
                 for (int j = 0; j < columns; j++)
                     buf.put((float)getElement(i, j));
+    }
+    
+    /**
+     * Writes the matrix elements to the given buffer. The buffer is not flipped
+     * by this operation. Note that this does not perform any writing of the matrix
+     * sizes.<p>
+     * 
+     * The {@code transpose} parameter allows the matrix to be transposed during
+     * writing; this transposition is thus more efficient than the use of
+     * {@link transpose()}.
+     * 
+     * @param buf The buffer to write to
+     * @param transpose {@code false} if the matrix should be written to the
+     * buffer in row-major order, or {@code true} for column-major order
+     */
+    public void writeToDoubleBuffer(ByteBuffer buf, boolean transpose) {
+        if (transpose)
+            for (int j = 0; j < columns; ++j)
+                for (int i = 0; i < rows; i++)
+                    buf.putDouble(getElement(i, j));
+            
+        else
+            for (int i = 0; i < rows; ++i)
+                for (int j = 0; j < columns; j++)
+                    buf.putDouble(getElement(i, j));
+    }
+    
+    /**
+     * Writes the matrix elements to the given buffer. The buffer is not flipped
+     * by this operation. Note that this does not perform any writing of the matrix
+     * sizes.<p>
+     * 
+     * The {@code transpose} parameter allows the matrix to be transposed during
+     * writing; this transposition is thus more efficient than the use of
+     * {@link transpose()}.
+     * 
+     * @param buf The buffer to write to
+     * @param transpose {@code false} if the matrix should be written to the
+     * buffer in row-major order, or {@code true} for column-major order
+     */
+    public void writeToFloatBuffer(ByteBuffer buf, boolean transpose) {
+        if (transpose)
+            for (int j = 0; j < columns; ++j)
+                for (int i = 0; i < rows; i++)
+                    buf.putFloat((float)getElement(i, j));
+            
+        else
+            for (int i = 0; i < rows; ++i)
+                for (int j = 0; j < columns; j++)
+                    buf.putFloat((float)getElement(i, j));
     }
     
     @Override

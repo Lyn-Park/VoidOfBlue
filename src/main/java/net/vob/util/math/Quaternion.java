@@ -32,16 +32,16 @@ public final class Quaternion extends Vector {
     public static final Quaternion ONES =  new Quaternion(1, 1, 1, 1);
     
     static {
-        ZERO.readonly();
-        POS_W.readonly();
-        NEG_W.readonly();
-        POS_X.readonly();
-        NEG_X.readonly();
-        POS_Y.readonly();
-        NEG_Y.readonly();
-        POS_Z.readonly();
-        NEG_Z.readonly();
-        ONES.readonly();
+        ZERO.immutable();
+        POS_W.immutable();
+        NEG_W.immutable();
+        POS_X.immutable();
+        NEG_X.immutable();
+        POS_Y.immutable();
+        NEG_Y.immutable();
+        POS_Z.immutable();
+        NEG_Z.immutable();
+        ONES.immutable();
     }
     
     /**

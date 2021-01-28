@@ -520,12 +520,13 @@ public final class Maths {
 
     /**
      * Packs the given vectors to a matrix. The resulting matrix has a size of m x n,
-     * and the following structure:<p>
+     * and the following structure:
      *
-     * {@code x1 x2 ... xn}<br>
-     * {@code y1 y2 ... yn}<br>
-     * {@code z1 z2 ... zn}<br>
-     * {@code ...}<p>
+     * <blockquote><pre> {@code x1 x2 x3 \u2026 xn}
+     * {@code y1 y2 y3 \u2026 yn}
+     * {@code z1 z2 z3 \u2026 zn}
+     * {@code \u22ee  \u22ee  \u22ee  \u22f1  \u22ee}
+     * {@code m1 m2 m3 \u2026 mn}</pre></blockquote>
      *
      * ...where m is the number of vectors and n is the size of the largest vector.
      * The other vectors are padded with zeroes to this size.
@@ -533,7 +534,7 @@ public final class Maths {
      * @param vecs The vectors to pack
      * @return The matrix containing the vectors
      */
-    public static Matrix packVectorsToMatrix(Vector... vecs) {
+    public static Matrix packVectorsToMatrixHorizontal(Vector... vecs) {
         int size = Arrays.stream(vecs).map((vec) -> vec.getSize()).reduce(0, Math::max);
         
         for (int i = 0; i < vecs.length; i++)
@@ -543,6 +544,36 @@ public final class Maths {
         for (int r = 0; r < vecs.length; r++)
             for (int c = 0; c < size; c++)
                 mat.setElement(r, c, vecs[r].getElement(c));
+                
+        return mat;
+    }
+
+    /**
+     * Packs the given vectors to a matrix. The resulting matrix has a size of n x m,
+     * and the following structure:
+     *
+     * <blockquote><pre> {@code x1 y1 z1 \u2026 m1}
+     * {@code x2 y2 z2 \u2026 m2}
+     * {@code x3 y3 z3 \u2026 m3}
+     * {@code \u22ee  \u22ee  \u22ee  \u22f1  \u22ee}
+     * {@code xn yn zn \u2026 mn}</pre></blockquote>
+     *
+     * ...where m is the number of vectors and n is the size of the largest vector.
+     * The other vectors are padded with zeroes to this size.
+     *
+     * @param vecs The vectors to pack
+     * @return The matrix containing the vectors
+     */
+    public static Matrix packVectorsToMatrixVertical(Vector... vecs) {
+        int size = Arrays.stream(vecs).map((vec) -> vec.getSize()).reduce(0, Math::max);
+        
+        for (int i = 0; i < vecs.length; i++)
+            vecs[i] = vecs[i].resize(size);
+        
+        Matrix mat = new Matrix(size, vecs.length);
+        for (int c = 0; c < vecs.length; c++)
+            for (int r = 0; r < size; r++)
+                mat.setElement(r, c, vecs[c].getElement(r));
                 
         return mat;
     }
@@ -558,7 +589,7 @@ public final class Maths {
     public static boolean areCollinearPoints(Vector... vecs) {
         if (vecs.length <= 2) return true;
         
-        return Maths.packVectorsToMatrix(vecs).rank() <= 1;
+        return Maths.packVectorsToMatrixHorizontal(vecs).rank() <= 1;
     }
     
     /**
@@ -572,6 +603,6 @@ public final class Maths {
     public static boolean areCoplanarPoints(Vector... vecs) {
         if (vecs.length <= 3) return true;
         
-        return Maths.packVectorsToMatrix(vecs).rank() <= 2;
+        return Maths.packVectorsToMatrixHorizontal(vecs).rank() <= 2;
     }
 }

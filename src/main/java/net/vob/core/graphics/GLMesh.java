@@ -587,9 +587,9 @@ final class GLMesh extends GLObject {
         // rendering calls
         GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, ivbo);
         
-        GraphicsManager.vertexAttribPointerMatrix(GraphicsManager.SHADER_INSTANCE_ATTRIBUTE_MODEL_MATRIX_INDEX, GraphicsManager.NUM_MODEL_MATRIX_ROWS_PER_INSTANCE,
+        GraphicsManager.vertexAttribPointerMatrix(GraphicsManager.SHADER_INSTANCE_ATTRIBUTE_MODEL_MATRIX_INDEX, 4,
                                                   false, GraphicsManager.INSTANCE_STRIDE, GraphicsManager.INSTANCE_MODEL_MATRIX_OFFSET);
-        GraphicsManager.vertexAttribPointerMatrix(GraphicsManager.SHADER_INSTANCE_ATTRIBUTE_PROJECTION_VIEW_MODEL_MATRIX_INDEX, GraphicsManager.NUM_PROJECTION_VIEW_MODEL_MATRIX_ROWS_PER_INSTANCE,
+        GraphicsManager.vertexAttribPointerMatrix(GraphicsManager.SHADER_INSTANCE_ATTRIBUTE_PROJECTION_VIEW_MODEL_MATRIX_INDEX, 4,
                                                   false, GraphicsManager.INSTANCE_STRIDE, GraphicsManager.INSTANCE_PROJECTION_VIEW_MODEL_MATRIX_OFFSET);
         
         GraphicsManager.vertexAttribDivisorMatrix(GraphicsManager.SHADER_INSTANCE_ATTRIBUTE_MODEL_MATRIX_INDEX, 1);

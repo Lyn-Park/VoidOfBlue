@@ -100,7 +100,7 @@ public abstract class AbstractTree<E> implements Tree<E, AbstractTree<E>> {
      */
     @Override
     public void setValue(E value) {
-        throw new UnsupportedOperationException(LocaleUtils.format("global.Exception.UnsupportedOperationException", "Tree", "setValue"));
+        throw new UnsupportedOperationException(LocaleUtils.format("global.Exception.UnsupportedOperationException", getClass().getCanonicalName(), "setValue"));
     }
     
     /**
@@ -123,7 +123,7 @@ public abstract class AbstractTree<E> implements Tree<E, AbstractTree<E>> {
      */
     @Override
     public boolean add(E value) {
-        throw new UnsupportedOperationException(LocaleUtils.format("global.Exception.UnsupportedOperationException", "Tree", "add"));
+        throw new UnsupportedOperationException(LocaleUtils.format("global.Exception.UnsupportedOperationException", getClass().getCanonicalName(), "add"));
     }
     
     /**
@@ -147,7 +147,7 @@ public abstract class AbstractTree<E> implements Tree<E, AbstractTree<E>> {
      */
     @Override
     public boolean add(AbstractTree<E> tree) {
-        throw new UnsupportedOperationException(LocaleUtils.format("global.Exception.UnsupportedOperationException", "Tree", "add"));
+        throw new UnsupportedOperationException(LocaleUtils.format("global.Exception.UnsupportedOperationException", getClass().getCanonicalName(), "add"));
     }
     
     @Override

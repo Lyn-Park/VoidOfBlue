@@ -83,7 +83,10 @@ public class Vector extends Matrix {
      * @return The resized copy of this vector
      */
     public Vector resize(int newSize) {
-        return new Vector(Arrays.copyOf(elements, newSize));
+        if (newSize == rows)
+            return new Vector(this);
+        else
+            return new Vector(Arrays.copyOf(elements, newSize));
     }
     
     /**

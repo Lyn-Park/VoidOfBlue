@@ -29,6 +29,7 @@ import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
+import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
 import org.lwjgl.opengl.GL32;
@@ -49,6 +50,9 @@ final class GraphicsManager {
     
     // --- CONSTANTS ---
     private static final Logger LOG = VoidOfBlue.getLogger(GraphicsManager.class);
+    
+    /** The static, global SSBO containing 4 bytes, with all set to 0. */
+    static int SHADER_STORAGE_BUFFER_OBJECT_ZERO;
     
     /** The index for the position attribute of vertices as stored in an array buffer object. */
     static final int SHADER_ATTRIBUTE_POSITION_INDEX = 0;
@@ -78,10 +82,10 @@ final class GraphicsManager {
     static final String SHADER_UNIFORM_VIEW_MATRIX_NAME = "viewMatrix";
     /** The string variable name shaders must use for referencing the projection matrix uniform variable. */
     static final String SHADER_UNIFORM_PROJECTION_MATRIX_NAME = "projectionMatrix";
-    /** The string variable name shaders must use for referencing the SSBO variable containing the vertex-bone weight values of skeletons. */
-    static final String SHADER_UNIFORM_SKELETON_WEIGHTS_NAME = "skeletonWeights";
-    /** The string variable name shaders must use for referencing the SSBO variable containing the affine transformations of skeletons. */
-    static final String SHADER_UNIFORM_SKELETON_TRANSFORMS_NAME = "skeletonTransforms";
+    /** The string name shaders must use for referencing the SSBO struct containing the vertex-bone weight values of skeletons. */
+    static final String SHADER_UNIFORM_SKELETON_WEIGHTS_NAME = "weightSSBO";
+    /** The string name shaders must use for referencing the SSBO struct containing the affine transformations of skeletons. */
+    static final String SHADER_UNIFORM_SKELETON_TRANSFORMS_NAME = "skeletonSSBO";
     
     /** The minor version number of the OpenGL API supported in the current execution environment. */
     static int MINOR_GL_VERSION_NUMBER;
@@ -123,16 +127,12 @@ final class GraphicsManager {
     /** The total stride of a 'semi' vertex, which is defined as a vertex without any normal vector. This stride is measured in bytes. */
     static final int SEMI_VERTEX_STRIDE = VERTEX_UV_OFFSET + (NUM_UV_COMPONENTS_PER_VERTEX * Float.BYTES);
     
-    /** The number of rows/columns in the model matrix for each instance of a mesh. */
-    static final int NUM_MODEL_MATRIX_ROWS_PER_INSTANCE = 4;
-    /** The number of rows/columns in the projection/view/model matrix for each instance of a mesh. */
-    static final int NUM_PROJECTION_VIEW_MODEL_MATRIX_ROWS_PER_INSTANCE = 4;
     /** The offset of the model matrix attribute of a mesh instance, in bytes. */
     static final int INSTANCE_MODEL_MATRIX_OFFSET = 0;
     /** The offset of the projection/view/model matrix attribute of a mesh instance, in bytes. */
-    static final int INSTANCE_PROJECTION_VIEW_MODEL_MATRIX_OFFSET = INSTANCE_MODEL_MATRIX_OFFSET + (NUM_MODEL_MATRIX_ROWS_PER_INSTANCE * NUM_MODEL_MATRIX_ROWS_PER_INSTANCE * Float.BYTES);
+    static final int INSTANCE_PROJECTION_VIEW_MODEL_MATRIX_OFFSET = INSTANCE_MODEL_MATRIX_OFFSET + (16 * Float.BYTES);
     /** The total stride of a mesh instance, in bytes. */
-    static final int INSTANCE_STRIDE = INSTANCE_PROJECTION_VIEW_MODEL_MATRIX_OFFSET + (NUM_PROJECTION_VIEW_MODEL_MATRIX_ROWS_PER_INSTANCE * NUM_PROJECTION_VIEW_MODEL_MATRIX_ROWS_PER_INSTANCE * Float.BYTES);
+    static final int INSTANCE_STRIDE = INSTANCE_PROJECTION_VIEW_MODEL_MATRIX_OFFSET + (16 * Float.BYTES);
     
     /** Status flag for if the projection and view matrices, as well as the window options, have changed. */
     static final int STATUS_MATRICES_CHANGED = 1;
@@ -231,9 +231,7 @@ final class GraphicsManager {
     }
     
     static FloatBuffer getInstanceMatrixBuffer(int size) {
-        int s1 = NUM_MODEL_MATRIX_ROWS_PER_INSTANCE * NUM_MODEL_MATRIX_ROWS_PER_INSTANCE;
-        int s2 = NUM_PROJECTION_VIEW_MODEL_MATRIX_ROWS_PER_INSTANCE * NUM_PROJECTION_VIEW_MODEL_MATRIX_ROWS_PER_INSTANCE;
-        return BufferUtils.createFloatBuffer((s1 + s2) * size);
+        return BufferUtils.createFloatBuffer(32 * size);
     }
     
     static void vertexAttribPointerMatrix(int baseindex, int rowsize, boolean normalized, int stride, int baseoffset) {
@@ -354,6 +352,12 @@ final class GraphicsManager {
             SKYBOX = new GLSkybox(GLTextureCubemap.DEFAULT);
             SKYBOX.init();
             
+            // Initialize the SSBO containing a single 0 int value
+            SHADER_STORAGE_BUFFER_OBJECT_ZERO = GL15.glGenBuffers();
+            GL15.glBindBuffer(GL43.GL_SHADER_STORAGE_BUFFER, SHADER_STORAGE_BUFFER_OBJECT_ZERO);
+            GL15.glBufferData(GL43.GL_SHADER_STORAGE_BUFFER, new int[]{ 0 }, GL15.GL_STATIC_DRAW);
+            GL15.glBindBuffer(GL43.GL_SHADER_STORAGE_BUFFER, 0);
+            
             LOOP_TIMER = Instant.now();
 
             LOG.log(Level.FINEST, "global.Status.Init.End", "Graphics thread");
@@ -471,6 +475,10 @@ final class GraphicsManager {
             GLTexture.REGISTRY.clear();
 
             SKYBOX.close();
+            
+            GL15.glBindBuffer(GL43.GL_SHADER_STORAGE_BUFFER, 0);
+            GL15.glDeleteBuffers(SHADER_STORAGE_BUFFER_OBJECT_ZERO);
+            
         } catch (Throwable t) {
             LOG.log(Level.SEVERE, LocaleUtils.format("global.Status.Close.Failed", "Graphics thread"), t);
         }

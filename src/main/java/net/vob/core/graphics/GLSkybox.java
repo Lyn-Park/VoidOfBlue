@@ -99,9 +99,9 @@ class GLSkybox extends GLObject {
         GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, ivbo);
         GL15.glBufferData(GL15.GL_ARRAY_BUFFER, BUFFER, GL15.GL_DYNAMIC_DRAW);
         
-        GraphicsManager.vertexAttribPointerMatrix(GraphicsManager.SHADER_INSTANCE_ATTRIBUTE_MODEL_MATRIX_INDEX, GraphicsManager.NUM_MODEL_MATRIX_ROWS_PER_INSTANCE,
+        GraphicsManager.vertexAttribPointerMatrix(GraphicsManager.SHADER_INSTANCE_ATTRIBUTE_MODEL_MATRIX_INDEX, 4,
                                                   false, GraphicsManager.INSTANCE_STRIDE, GraphicsManager.INSTANCE_MODEL_MATRIX_OFFSET);
-        GraphicsManager.vertexAttribPointerMatrix(GraphicsManager.SHADER_INSTANCE_ATTRIBUTE_PROJECTION_VIEW_MODEL_MATRIX_INDEX, GraphicsManager.NUM_PROJECTION_VIEW_MODEL_MATRIX_ROWS_PER_INSTANCE,
+        GraphicsManager.vertexAttribPointerMatrix(GraphicsManager.SHADER_INSTANCE_ATTRIBUTE_PROJECTION_VIEW_MODEL_MATRIX_INDEX, 4,
                                                   false, GraphicsManager.INSTANCE_STRIDE, GraphicsManager.INSTANCE_PROJECTION_VIEW_MODEL_MATRIX_OFFSET);
         
         GraphicsManager.vertexAttribDivisorMatrix(GraphicsManager.SHADER_INSTANCE_ATTRIBUTE_MODEL_MATRIX_INDEX, 1);
@@ -168,8 +168,8 @@ class GLSkybox extends GLObject {
                                     .mul(Matrix.getRotationMatrix(GraphicsManager.VIEW_TRANSFORM.getRotation().conjugate()))
                                     .mul(model);
         
-        model.writeToBuffer(BUFFER, true);
-        pvm.writeToBuffer(BUFFER, true);
+        model.writeToFloatBuffer(BUFFER, true);
+        pvm.writeToFloatBuffer(BUFFER, true);
         BUFFER.flip();
     }
 

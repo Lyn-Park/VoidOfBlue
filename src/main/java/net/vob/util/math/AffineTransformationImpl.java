@@ -27,8 +27,8 @@ public class AffineTransformationImpl implements AffineTransformation {
     private final ReentrantLock lock = new ReentrantLock();
     
     public AffineTransformationImpl() {
-        matrix.readonly();
-        invMatrix.readonly();
+        matrix.immutable();
+        invMatrix.immutable();
     }
     
     public AffineTransformationImpl(AffineTransformation transform) {
@@ -221,12 +221,12 @@ public class AffineTransformationImpl implements AffineTransformation {
                 matrix = Matrix.getTranslationMatrix(translation)
                                .mul(Matrix.getRotationMatrix(rotation))
                                .mul(Matrix.getScalingMatrix(scale));
-                matrix.readonly();
+                matrix.immutable();
                 
                 invMatrix = Matrix.getScalingMatrix(scale.elementInv())
                                   .mul(Matrix.getRotationMatrix(rotation.conjugate()))
                                   .mul(Matrix.getTranslationMatrix(translation.mul(-1)));
-                invMatrix.readonly();
+                invMatrix.immutable();
             }
             
             return matrix;
@@ -260,12 +260,12 @@ public class AffineTransformationImpl implements AffineTransformation {
                 matrix = Matrix.getTranslationMatrix(translation)
                                .mul(Matrix.getRotationMatrix(rotation))
                                .mul(Matrix.getScalingMatrix(scale));
-                matrix.readonly();
+                matrix.immutable();
                 
                 invMatrix = Matrix.getScalingMatrix(scale.elementInv())
                                   .mul(Matrix.getRotationMatrix(rotation.conjugate()))
                                   .mul(Matrix.getTranslationMatrix(translation.mul(-1)));
-                invMatrix.readonly();
+                invMatrix.immutable();
             }
             
             return invMatrix;

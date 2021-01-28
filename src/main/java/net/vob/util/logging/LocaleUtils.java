@@ -8,7 +8,7 @@ import java.util.Enumeration;
 import java.util.Locale;
 import java.util.Properties;
 import java.util.ResourceBundle;
-import net.vob.mods.ModpackManager;
+import net.vob.mods.ModManager;
 
 /**
  * Utility class for formatting messages based off of the current locale. It is
@@ -56,7 +56,7 @@ public final class LocaleUtils {
      * @return the final formatted string
      */
     public static String format(String messageKey, Object... args) {
-        if (!reloaded && ModpackManager.areModsLoaded()) {
+        if (!reloaded && ModManager.areModsLoaded()) {
             reloaded = true;
             BUNDLE = new MultiPropertyResourceBundle(LOGGING_BUNDLE_NAME);
         }
@@ -106,7 +106,7 @@ public final class LocaleUtils {
             
             private Properties loadProperties(String baseName) throws IOException {
                 Properties properties = new Properties();
-                Enumeration<URL> urls = ModpackManager.getResources(baseName + ".properties");
+                Enumeration<URL> urls = ModManager.getResources(baseName + ".properties");
                 
                 while (urls.hasMoreElements()) {
                     try (InputStream stream = urls.nextElement().openStream()) {
