@@ -56,7 +56,7 @@ final class Message {
                     o = null;
                 else {
                     GraphicsEngine.windowOptions = WINDOW_OPTIONS;
-                    GraphicsEngine.setWindowDims(WINDOW_OPTIONS.getWindowWidth(), WINDOW_OPTIONS.getWindowHeight());
+                    GraphicsEngine.setWindowSize(WINDOW_OPTIONS.getWindowWidth(), WINDOW_OPTIONS.getWindowHeight());
                 }
                 break;
                 

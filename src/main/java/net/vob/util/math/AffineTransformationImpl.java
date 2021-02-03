@@ -21,14 +21,13 @@ public class AffineTransformationImpl implements AffineTransformation {
     protected Vector3 scale = Vector3.ONES;
     
     private Matrix matrix = Matrix.identity(4);
-    private Matrix invMatrix = Matrix.identity(4);
+    private int prevFlags = 0;
     private boolean dirty = true;
     
     private final ReentrantLock lock = new ReentrantLock();
     
     public AffineTransformationImpl() {
         matrix.immutable();
-        invMatrix.immutable();
     }
     
     public AffineTransformationImpl(AffineTransformation transform) {
@@ -208,67 +207,48 @@ public class AffineTransformationImpl implements AffineTransformation {
      * Note that the scaling and translation operations are done with respect to the
      * world space, rather than the object space.
      * 
-     * @return an readonly {@code Matrix} instance representing this affine
+     * @param flags {@inheritDoc}
+     * @return a readonly {@code Matrix} instance representing this affine
      * transformation
      */
     @Override
-    public Matrix getTransformationMatrix() {
+    public Matrix getTransformationMatrix(int flags) {
         lock.lock();
         try {
-            if (dirty) {
+            if (dirty || prevFlags != flags) {
                 dirty = false;
+                prevFlags = flags;
                 
-                matrix = Matrix.getTranslationMatrix(translation)
-                               .mul(Matrix.getRotationMatrix(rotation))
-                               .mul(Matrix.getScalingMatrix(scale));
-                matrix.immutable();
+                Matrix T, R, S;
                 
-                invMatrix = Matrix.getScalingMatrix(scale.elementInv())
-                                  .mul(Matrix.getRotationMatrix(rotation.conjugate()))
-                                  .mul(Matrix.getTranslationMatrix(translation.mul(-1)));
-                invMatrix.immutable();
+                if ((flags & FLAG_IGNORE_TRANSLATION) > 0)
+                    T = Matrix.identity(4);
+                else if ((flags & FLAG_INVERT_TRANSLATION) > 0)
+                    T = Matrix.getTranslationMatrix(translation.mul(-1));
+                else
+                    T = Matrix.getTranslationMatrix(translation);
+                
+                if ((flags & FLAG_IGNORE_ROTATION) > 0)
+                    R = Matrix.identity(4);
+                else if ((flags & FLAG_INVERT_ROTATION) > 0)
+                    R = Matrix.getRotationMatrix(rotation.conjugate());
+                else
+                    R = Matrix.getRotationMatrix(rotation);
+                
+                if ((flags & FLAG_IGNORE_ROTATION) > 0)
+                    S = Matrix.identity(4);
+                else if ((flags & FLAG_INVERT_ROTATION) > 0)
+                    S = Matrix.getScalingMatrix(scale.elementInv());
+                else
+                    S = Matrix.getScalingMatrix(scale);
+                
+                if ((flags & FLAG_INVERT_TRANSFORM_ORDER) > 0)
+                    matrix = S.mul(R).mul(T);
+                else
+                    matrix = T.mul(R).mul(S);
             }
             
             return matrix;
-            
-        } finally {
-            lock.unlock();
-        }
-    }
-    
-    /**
-     * {@inheritDoc}<p>
-     * 
-     * The readonly inverse transformation matrix is stored internally, which is
-     * returned by this method. If this transformation has been flagged as dirty by
-     * any of the component-altering methods, then the internal matrices are reloaded
-     * using the new components prior to returning.<p>
-     * 
-     * Note that the scaling and translation operations are done with respect to the
-     * world space, rather than the object space.
-     * 
-     * @return an readonly {@code Matrix} instance representing the inverse of this
-     * affine transformation
-     */
-    @Override
-    public Matrix getInverseTransformationMatrix() {
-        lock.lock();
-        try {
-            if (dirty) {
-                dirty = false;
-                
-                matrix = Matrix.getTranslationMatrix(translation)
-                               .mul(Matrix.getRotationMatrix(rotation))
-                               .mul(Matrix.getScalingMatrix(scale));
-                matrix.immutable();
-                
-                invMatrix = Matrix.getScalingMatrix(scale.elementInv())
-                                  .mul(Matrix.getRotationMatrix(rotation.conjugate()))
-                                  .mul(Matrix.getTranslationMatrix(translation.mul(-1)));
-                invMatrix.immutable();
-            }
-            
-            return invMatrix;
             
         } finally {
             lock.unlock();
@@ -471,31 +451,14 @@ public class AffineTransformationImpl implements AffineTransformation {
         * method throws an {@link UnsupportedOperationException}. Otherwise, the call
         * passes through to the wrapped instance.
         * 
-        * @return an readonly {@code Matrix} instance representing this affine
+        * @param flags {@inheritDoc}
+        * @return a readonly {@code Matrix} instance representing this affine
         * transformation
         */
         @Override
-        public Matrix getTransformationMatrix() {
+        public Matrix getTransformationMatrix(int flags) {
             if (allowMatrixQuery)
-                return wrapped.getTransformationMatrix();
-            
-            throw new UnsupportedOperationException(LocaleUtils.format("AffineTransformationImpl.MatrixQueryUnsupported"));
-        }
-        
-        /**
-        * {@inheritDoc}<p>
-        * 
-        * If this view instance does not allow for querying of the matrix, then this
-        * method throws an {@link UnsupportedOperationException}. Otherwise, the call
-        * passes through to the wrapped instance.
-        * 
-        * @return an readonly {@code Matrix} instance representing the inverse of 
-        * this affine transformation
-        */
-        @Override
-        public Matrix getInverseTransformationMatrix() {
-            if (allowMatrixQuery)
-                return wrapped.getInverseTransformationMatrix();
+                return wrapped.getTransformationMatrix(flags);
             
             throw new UnsupportedOperationException(LocaleUtils.format("AffineTransformationImpl.MatrixQueryUnsupported"));
         }

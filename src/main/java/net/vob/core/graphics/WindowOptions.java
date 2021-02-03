@@ -2,6 +2,7 @@ package net.vob.core.graphics;
 
 import net.vob.util.math.Maths;
 import net.vob.util.math.Matrix;
+import org.lwjgl.opengl.GL11;
 
 /**
  * Container class for the various window options. This includes the dimensions of
@@ -14,7 +15,21 @@ public final class WindowOptions {
     private float fov, zNearDist, zFarDist;
     
     private final Matrix projectionMatrix = new Matrix(4);
-    private boolean dirty = true;
+    private byte status = 3;
+    
+    private static final int STATUS_DIRTY = 1;
+    private static final int STATUS_UPDATE_WINDOW_SIZE = 2;
+    
+    private void setStatus(int statusCode, boolean value) {
+        if (value)
+            status |= statusCode;
+        else
+            status &= ~statusCode;
+    }
+    
+    private boolean getStatus(int statusCode) {
+        return (status & statusCode) > 0;
+    }
     
     /**
      * Initializes the window options using the various setters for each parameter.
@@ -92,11 +107,16 @@ public final class WindowOptions {
      * @param windowWidth the new window width
      */
     public synchronized void setWindowWidth(int windowWidth) {
+        setWindowWidth(windowWidth, true);
+    }
+    
+    synchronized void setWindowWidth(int windowWidth, boolean updateWindow) {
         if (windowWidth < GraphicsEngine.CONSTANT_MIN_WINDOW_WIDTH)
             windowWidth = GraphicsEngine.CONSTANT_MIN_WINDOW_WIDTH;
         
         this.windowWidth = windowWidth;
-        this.dirty = true;
+        setStatus(STATUS_DIRTY, true);
+        setStatus(STATUS_UPDATE_WINDOW_SIZE, updateWindow);
     }
     
     /**
@@ -105,11 +125,16 @@ public final class WindowOptions {
      * @param windowHeight the new window height
      */
     public synchronized void setWindowHeight(int windowHeight) {
+        setWindowHeight(windowHeight, true);
+    }
+    
+    synchronized void setWindowHeight(int windowHeight, boolean updateWindow) {
         if (windowHeight < GraphicsEngine.CONSTANT_MIN_WINDOW_HEIGHT)
             windowHeight = GraphicsEngine.CONSTANT_MIN_WINDOW_HEIGHT;
         
         this.windowHeight = windowHeight;
-        this.dirty = true;
+        setStatus(STATUS_DIRTY, true);
+        setStatus(STATUS_UPDATE_WINDOW_SIZE, updateWindow);
     }
     
     /**
@@ -132,7 +157,7 @@ public final class WindowOptions {
      */
     public synchronized void setFOV(float fov) {
         this.fov = Maths.clamp(GraphicsEngine.CONSTANT_MIN_FOV, fov, GraphicsEngine.CONSTANT_MAX_FOV);
-        this.dirty = true;
+        setStatus(STATUS_DIRTY, true);
     }
     
     /**
@@ -157,7 +182,7 @@ public final class WindowOptions {
         
         this.zNearDist = zNearDist;
         this.zFarDist = zFarDist;
-        this.dirty = true;
+        setStatus(STATUS_DIRTY, true);
     }
     
     /**
@@ -170,7 +195,7 @@ public final class WindowOptions {
      */
     public synchronized void setZNearDist(float zNearDist) {
         this.zNearDist = Maths.clamp(GraphicsEngine.CONSTANT_MIN_ZNEAR_DIST, zNearDist, zFarDist - GraphicsEngine.CONSTANT_MIN_Z_DIST_SEPARATION);
-        this.dirty = true;
+        setStatus(STATUS_DIRTY, true);
     }
     
     /**
@@ -183,21 +208,21 @@ public final class WindowOptions {
      */
     public synchronized void setZFarDist(float zFarDist) {
         this.zFarDist = Maths.clamp(zNearDist + GraphicsEngine.CONSTANT_MIN_Z_DIST_SEPARATION, zFarDist, GraphicsEngine.CONSTANT_MAX_ZFAR_DIST);
-        this.dirty = true;
+        setStatus(STATUS_DIRTY, true);
     }
     
     /**
      * Flags these options as dirty.
      */
     synchronized void setDirty() {
-        dirty = true;
+        setStatus(STATUS_DIRTY, true);
     }
     
     /**
      * @return {@code true} if these options are dirty
      */
     synchronized boolean isDirty() {
-        return dirty;
+        return getStatus(STATUS_DIRTY);
     }
     
     /**
@@ -205,14 +230,14 @@ public final class WindowOptions {
      * 
      * If these options are are dirty, then the internally held projection matrix is
      * reloaded using the current options; this will also flush any changes to the
-     * window width/height to GLFW so that the dimensions of the actual window match
-     * the current options.
+     * window width/height to GLFW so that the dimensions and viewport of the actual
+     * window match the current options.
      * 
      * @return the projection matrix for this set of options
      */
     synchronized Matrix flushAndGetProjectionMatrix() {
-        if (dirty) {
-            dirty = false;
+        if (getStatus(STATUS_DIRTY)) {
+            setStatus(STATUS_DIRTY, false);
             
             double tanfov = Math.tan(Math.PI * fov / 360d);
             double frustrumlength = zFarDist - zNearDist;
@@ -223,7 +248,11 @@ public final class WindowOptions {
             projectionMatrix.setElement(2, 3, -(2 * zFarDist * zNearDist) / frustrumlength);
             projectionMatrix.setElement(3, 2, -1);
             
-            GraphicsEngine.setWindowDims(windowWidth, windowHeight);
+            if (getStatus(STATUS_UPDATE_WINDOW_SIZE))
+                GraphicsEngine.setWindowSize(windowWidth, windowHeight);
+            GL11.glViewport(0, 0, windowWidth, windowHeight);
+            
+            setStatus(STATUS_UPDATE_WINDOW_SIZE, true);
         }
         
         return projectionMatrix;

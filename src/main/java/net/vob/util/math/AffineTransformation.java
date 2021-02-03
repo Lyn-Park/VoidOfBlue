@@ -16,6 +16,49 @@ import java.util.concurrent.locks.ReentrantLock;
  */
 public interface AffineTransformation {
     /**
+     * Flag indicating that the translation component should not be written to the
+     * transformation matrix at all.
+     */
+    public static final int FLAG_IGNORE_TRANSLATION = 1;
+    /**
+     * Flag indicating that the rotation component should not be written to the
+     * transformation matrix at all.
+     */
+    public static final int FLAG_IGNORE_ROTATION = 2;
+    /**
+     * Flag indicating that the scaling component should not be written to the
+     * transformation matrix at all.
+     */
+    public static final int FLAG_IGNORE_SCALING = 4;
+    /**
+     * Flag indicating that the translation component should be inverted prior to
+     * writing to the transformation matrix. Has no effect if
+     * {@link FLAG_IGNORE_TRANSLATION} is present.
+     */
+    public static final int FLAG_INVERT_TRANSLATION = 8;
+    /**
+     * Flag indicating that the rotation component should be inverted prior to
+     * writing to the transformation matrix. Has no effect if
+     * {@link FLAG_IGNORE_ROTATION} is present.
+     */
+    public static final int FLAG_INVERT_ROTATION = 16;
+    /**
+     * Flag indicating that the scaling component should be inverted prior to
+     * writing to the transformation matrix. Has no effect if
+     * {@link FLAG_IGNORE_SCALING} is present.
+     */
+    public static final int FLAG_INVERT_SCALING = 32;
+    /**
+     * Flag indicating that the transformation components should be written to
+     * the transformation matrix in inverse order. Normally the order of
+     * transformations is:
+     * <blockquote>
+     * {@code matrix = translationMatrix * rotationMatrix * scalingMatrix}
+     * </blockquote>
+     */
+    public static final int FLAG_INVERT_TRANSFORM_ORDER = 64;
+    
+    /**
      * Gets the current translation of this transformation.
      * @return the current translation vector
      */
@@ -112,28 +155,22 @@ public interface AffineTransformation {
      *  <li>A rotation of the object by the rotation quaternion.</li>
      *  <li>A translation of the object by the translation vector.</li>
      * </ol>
+     * The flags argument can be used to make any extra modifications to the 3
+     * transformation components prior to writing to the transformation matrix.<p>
      * 
-     * Implementations of this method should not alter the translation, rotation, or
-     * scaling vectors in any way.
+     * Implementations of this method should not alter the stored translation,
+     * rotation, or scaling vectors in any way, and should ensure the behaviour
+     * defined by the input flags is respected.
      * 
+     * @param flags a field of bit flags. Can be 0, or any bit-wise combination of
+     * {@link FLAG_IGNORE_TRANSLATION}, {@link FLAG_IGNORE_ROTATION},
+     * {@link FLAG_IGNORE_SCALING}, {@link FLAG_INVERT_TRANSLATION},
+     * {@link FLAG_INVERT_ROTATION}, {@link FLAG_INVERT_SCALING}, and
+     * {@link FLAG_INVERT_TRANSFORM_ORDER}. Bits outside these bit flags are
+     * ignored
      * @return a {@code Matrix} instance representing this affine transformation
      */
-    public Matrix getTransformationMatrix();
-    
-    /**
-     * Gets the inverse transformation matrix of this affine transformation. This is
-     * defined to be the transformation matrix, as returned by
-     * {@link getTransformationMatrix()}, on the condition that each component
-     * operation of this affine transformation (translation, rotation, scaling) have
-     * been set to their inverses.<p>
-     * 
-     * Implementations of this method should not alter the translation, rotation, or
-     * scaling vectors in any way.
-     * 
-     * @return a {@code Matrix} instance representing the inverse of this affine
-     * transformation
-     */
-    public Matrix getInverseTransformationMatrix();
+    public Matrix getTransformationMatrix(int flags);
     
     /**
      * Transforms the given vector by this affine transformation.<p>

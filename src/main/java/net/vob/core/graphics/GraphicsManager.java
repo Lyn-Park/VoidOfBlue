@@ -143,17 +143,40 @@ final class GraphicsManager {
     
     // --- VARIABLES ---
     
+    /**
+     * The {@link ScheduledExecutorService} containing the dedicated graphical thread.
+     */
     private static final ScheduledExecutorService THREAD = Executors.newSingleThreadScheduledExecutor((r) -> new Thread(r, "Graphics"));
+    /**
+     * The {@link Future} for the graphical loop. This can be cancelled when it is time for
+     * the loop to be terminated.
+     */
     private static Future<?> LOOP_FUTURE;
+    /**
+     * The {@link BlockingQueue} messaging queue for the graphical thread. This is used for
+     * inter-thread communication using {@link Message} instances.
+     */
+    static final BlockingQueue<Message> MESSAGE_QUEUE = new LinkedBlockingQueue<>(100);
     
-    static final BlockingQueue<Message> MESSAGE_QUEUE = new LinkedBlockingQueue<>(1000);
+    /**
+     * The {@link AffineTransformation} corresponding to the camera position in world space.
+     */
     static AffineTransformation VIEW_TRANSFORM = AffineTransformationImpl.IDENTITY;
     static Matrix VIEW_MATRIX = Matrix.identity(4);
     static Matrix PROJ_MATRIX = Matrix.identity(4);
     static Matrix PROJ_VIEW_MATRIX = Matrix.identity(4);
     
+    /**
+     * The {@link CountDownLatch} used to make the {@link GraphicsEngine} await the
+     * initialization of the graphics thread before continuing.
+     */
     static final CountDownLatch INIT_LATCH = new CountDownLatch(1);
     
+    /**
+     * The core rendering map. This maps shader programs to a set of renderables, and is
+     * where all render operations originate. If for any reason a mapping between a shader
+     * program and a renderable becomes invalid, then the mapping will be removed
+     */
     private static final Map<GLShaderProgram, Set<GLRenderable>> RENDERING_MAP = new HashMap<>();
     private static byte STATUS = 0;
     static double DELTA_TIME = 0;
@@ -170,16 +193,37 @@ final class GraphicsManager {
     
     // --- PACKAGE PRIVATE FUNCTIONS ---
     
+    /**
+     * Initializes the manager. This means initializing the graphical thread, and scheduling
+     * the main rendering loop.
+     * @param loopPeriod the minimum amount of time between invocations of the graphical loop,
+     * in milliseconds
+     */
     static void init(long loopPeriod) {
         THREAD.schedule(GraphicsManager::threadInitCallback, 0, TimeUnit.MILLISECONDS);
         LOOP_FUTURE = THREAD.scheduleAtFixedRate(GraphicsManager::threadLoopCallback, 0, loopPeriod, TimeUnit.MILLISECONDS);
     }
     
+    /**
+     * Closes the manager, by terminating the graphical loop and scheduling the thread for
+     * any finishing operations.
+     */
     static void close() {
         LOOP_FUTURE.cancel(false);
         THREAD.schedule(GraphicsManager::threadFinishCallback, 0, TimeUnit.MILLISECONDS);
     }
     
+    /**
+     * Applies a render mapping between the given program and the given renderable. This
+     * places the given renderable within {@link RENDERING_MAP} using the program as the
+     * key, then updates the renderable to hold a reference to the program.<p>
+     * 
+     * Note that this method does <i>not</i> check to ensure the renderable is in
+     * {@link RENDERING_MAP} already.
+     * 
+     * @param program the {@link GLShaderProgram} to use as the new key
+     * @param renderable the {@link GLRenderable} to use as the new value
+     */
     static void applyRenderingMap(GLShaderProgram program, GLRenderable renderable) {
         if (program != null) {
             if (RENDERING_MAP.containsKey(program))
@@ -191,6 +235,18 @@ final class GraphicsManager {
         renderable.program = program;
     }
     
+    /**
+     * Applies a render mapping between the given program and the given renderables. This
+     * places each given renderable within {@link RENDERING_MAP} using the program as the
+     * key, then updates the renderables to hold a reference to the program.<p>
+     * 
+     * Note that this method does <i>not</i> check to ensure the renderables are in
+     * {@link RENDERING_MAP} already.
+     * 
+     * @param program the {@link GLShaderProgram} to use as the new key
+     * @param renderable the set of {@link GLRenderable} instances to use as the new
+     * values
+     */
     static void applyRenderingMap(GLShaderProgram program, Set<GLRenderable> renderables) {
         if (RENDERING_MAP.containsKey(program))
             RENDERING_MAP.get(program).addAll(renderables);
@@ -200,6 +256,15 @@ final class GraphicsManager {
         renderables.forEach((renderable) -> renderable.program = program);
     }
     
+    /**
+     * Removes the render mapping of the renderable, if it has one. Rather than searching
+     * the entire {@link RENDERING_MAP} for the renderable, this method uses the program
+     * reference held within the renderable to know which key to look under; thus, the
+     * renderable is required to have this reference be up-to-date for this method to work
+     * correctly.
+     * 
+     * @param renderable the {@link GLRenderable} instance to remove from the render map
+     */
     static void removeRenderingMap(GLRenderable renderable) {
         if (renderable.program != null && RENDERING_MAP.containsKey(renderable.program)) {
             RENDERING_MAP.get(renderable.program).remove(renderable);
@@ -395,7 +460,10 @@ final class GraphicsManager {
             // view and projection matrices
             if (VIEW_TRANSFORM.isDirty() || GraphicsEngine.windowOptions.isDirty()) {
                 PROJ_MATRIX = GraphicsEngine.windowOptions.flushAndGetProjectionMatrix();
-                VIEW_MATRIX = VIEW_TRANSFORM.getInverseTransformationMatrix();
+                VIEW_MATRIX = VIEW_TRANSFORM.getTransformationMatrix(AffineTransformation.FLAG_IGNORE_SCALING |
+                                                                     AffineTransformation.FLAG_INVERT_TRANSLATION |
+                                                                     AffineTransformation.FLAG_INVERT_ROTATION |
+                                                                     AffineTransformation.FLAG_INVERT_TRANSFORM_ORDER);
 
                 PROJ_VIEW_MATRIX = PROJ_MATRIX.mul(VIEW_MATRIX);
                 setStatus(STATUS_MATRICES_CHANGED);

@@ -193,7 +193,7 @@ public final class ModManager {
                 .forEachOrdered((entry) -> {
                     Mod mod = entry.getValue();
                     try {
-                        mod.entrypoint.mainEntry();
+                        mod.entrypoint.mainBegin();
                         ++i[0];
                     } catch (Throwable e) {
                         LOG.log(Level.FINER, LocaleUtils.format("ModpackManager.loadModFiles.ModException", mod.name, mod.modid, mod.version), e);
@@ -202,6 +202,26 @@ public final class ModManager {
             
             LOG.log(Level.INFO, "ModpackManager.loadModFiles.End", i[0]);
         }
+    }
+    
+    public static void unloadModFiles() {
+        LOG.log(Level.INFO, "ModpackManager.unloadModFiles.Start");
+        final int[] i = new int[1];
+        
+        MODS.entrySet()
+            .stream()
+            .sorted((e1, e2) -> Integer.compare(e2.getValue().priority, e1.getValue().priority))
+            .forEachOrdered((entry) -> {
+                    Mod mod = entry.getValue();
+                    try {
+                        mod.entrypoint.mainBegin();
+                        ++i[0];
+                    } catch (Throwable e) {
+                        LOG.log(Level.FINER, LocaleUtils.format("ModpackManager.unloadModFiles.ModException", mod.name, mod.modid, mod.version), e);
+                    }
+            });
+        
+        LOG.log(Level.INFO, "ModpackManager.unloadModFiles.End", i[0]);
     }
     
     private static ErrorContainer checkModConfigJson(JSONObject config, ClassLoader loader, JarFile jar) throws IOException, JSONException {

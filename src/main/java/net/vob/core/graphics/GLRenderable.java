@@ -131,7 +131,7 @@ final class GLRenderable extends Closable {
         
         FloatBuffer mBuf = BufferUtils.createFloatBuffer(skeleton.size() * 16);
         
-        Tree<Matrix, ?> baseMatrixTree = new ArrayTree<>(skeleton.map((t) -> t.getTransformationMatrix()));
+        Tree<Matrix, ?> baseMatrixTree = new ArrayTree<>(skeleton.map((t) -> t.getTransformationMatrix(0)));
         Iterator<? extends Tree<Matrix, ?>> bmtIt = baseMatrixTree.preOrderWalk();
         
         Tree<Matrix, ?> bone = bmtIt.next();
@@ -178,7 +178,7 @@ final class GLRenderable extends Closable {
             if (bone.getValue().isDirty()) {
                 int j = i;
                 
-                Tree<Matrix, ?> matrixTree = bone.map((transform) -> transform.getTransformationMatrix());
+                Tree<Matrix, ?> matrixTree = bone.map((transform) -> transform.getTransformationMatrix(0));
                 Iterator<? extends Tree<Matrix, ?>> matrixIt = matrixTree.preOrderWalk();
                 matrixIt.next();
                 
@@ -217,7 +217,7 @@ final class GLRenderable extends Closable {
         
         transform.getLock().lock();
         try {
-            model = transform.getTransformationMatrix();
+            model = transform.getTransformationMatrix(0);
         } finally {
             transform.getLock().unlock();
         }
@@ -250,7 +250,7 @@ final class GLRenderable extends Closable {
 
             instanceTransforms[i].getLock().lock();
             try {
-                model = instanceTransforms[i].getTransformationMatrix();
+                model = instanceTransforms[i].getTransformationMatrix(0);
             } finally {
                 instanceTransforms[i].getLock().unlock();
             }
@@ -290,7 +290,7 @@ final class GLRenderable extends Closable {
                 Matrix model;
                 instanceTransforms[i].getLock().lock();
                 try {
-                    model = instanceTransforms[i].getTransformationMatrix();
+                    model = instanceTransforms[i].getTransformationMatrix(0);
                 } finally {
                     instanceTransforms[i].getLock().unlock();
                 }

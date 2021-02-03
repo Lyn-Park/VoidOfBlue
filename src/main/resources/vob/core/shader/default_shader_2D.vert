@@ -1,13 +1,13 @@
 #version 430
 
-layout(std430) buffer weightSSBO
+layout(std430) restrict buffer weightSSBO
 {
     uint weight_rows;
     uint weight_columns;
     float[] weights;
 };
 
-layout(std430) buffer skeletonSSBO
+layout(std430) restrict buffer skeletonSSBO
 {
     mat4[] bones;
 };

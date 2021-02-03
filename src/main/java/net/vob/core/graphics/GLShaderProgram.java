@@ -33,9 +33,10 @@ final class GLShaderProgram extends GLObject {
     static final GLShaderProgram DEFAULT_2D = new GLShaderProgram(GLShader.DEFAULT_VERT_2D, null, GLShader.DEFAULT_FRAG_2D, false);
     static final GLShaderProgram DEFAULT_CUBE = new GLShaderProgram(GLShader.DEFAULT_VERT_CUBE, null, GLShader.DEFAULT_FRAG_CUBE, true);
     static final GLShaderProgram DEFAULT_UI = new GLShaderProgram(GLShader.DEFAULT_VERT_UI, null, GLShader.DEFAULT_FRAG_UI, false);
+    static final GLShaderProgram SKYBOX = new GLShaderProgram(GLShader.SKYBOX_VERT, null, GLShader.SKYBOX_FRAG, true);
     
     static Set<GLShaderProgram> getDefaults() {
-        return Sets.newHashSet(DEFAULT_2D, DEFAULT_CUBE, DEFAULT_UI);
+        return Sets.newHashSet(DEFAULT_2D, DEFAULT_CUBE, DEFAULT_UI, SKYBOX);
     }
     
     static final int STATUS_MODE = 1;

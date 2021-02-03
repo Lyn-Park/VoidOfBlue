@@ -7,5 +7,6 @@ package net.vob.mods;
  * @author Lyn-Park
  */
 public interface ModEntrypoint {
-    void mainEntry();
+    void mainBegin();
+    void mainFinish();
 }

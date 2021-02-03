@@ -1,13 +1,11 @@
 package net.vob.core.graphics;
 
 import java.awt.image.BufferedImage;
-import java.io.PrintStream;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
 import net.vob.VoidOfBlue;
-import net.vob.util.logging.LoggerOutputStream;
 import org.lwjgl.glfw.GLFWErrorCallback;
 import org.lwjgl.glfw.GLFWVidMode;
 import net.vob.util.logging.Level;
@@ -22,6 +20,7 @@ import net.vob.util.Trees;
 import net.vob.util.math.Matrix;
 
 import static org.lwjgl.glfw.GLFW.*;
+import org.lwjgl.opengl.GL11;
 
 /**
  * The static manager class for the window. This extends to not only handling GLFW and
@@ -63,13 +62,13 @@ import static org.lwjgl.glfw.GLFW.*;
  * relations between objects, and serves to simplify the operation of the
  * {@code GraphicsManager} and the rendering loop. The hierarchy is as follows:
  * <blockquote><pre>
- *                      <b>Mesh</b>              (multiple renderables        <b>Vertex Shader</b> (mandatory)
- *                         \u2198                   per program)             \u2199
- *      <b>2D Texture</b>       <b>Renderable Object</b>      \u27a1     <b>Shader Program</b> \u2b05 <b>Geometry Shader</b> (optional)
- *              \u2198         \u2197                                             \u2196
- *               <b>Textures</b>                                              <b>Fragment Shader</b> (mandatory)
- *              \u2197     (multiple textures
- * <b>Cubemap Texture</b>    per renderable)
+ *                     <b>Mesh</b>              (multiple renderables        <b>Vertex Shader</b> (mandatory)
+ *                        \u2198                   per program)             \u2199
+ *      <b>2D Texture</b>      <b>Renderable Object</b>      \u27a1     <b>Shader Program</b> \u2b05 <b>Geometry Shader</b> (optional)
+ *              \u2198         \u2197                                            \u2196
+ *               <b>Textures</b>                                             <b>Fragment Shader</b> (mandatory)
+ *              \u2197     (only one type of texture
+ * <b>Cubemap Texture</b>       per renderable)
  * </pre></blockquote>
  * External threads and classes must use the messaging functions this class provides to
  * communicate with the graphics thread, and build up the desired object(s) as needed. For
@@ -118,37 +117,75 @@ import static org.lwjgl.glfw.GLFW.*;
  * @author Lyn-Park
  */
 public final class GraphicsEngine {
+    /**
+     * An empty, private constructor. This prevents the class from the being instantiated,
+     * as it is designed to be a container class for static methods and fields.
+     */
     private GraphicsEngine() {}
     
     private static final Logger LOG = VoidOfBlue.getLogger(GraphicsEngine.class);
     
-    public static final int VALUE_NULL = 0;
-    public static final int VALUE_DONT_CARE = GLFW_DONT_CARE;
-    public static final int VALUE_FALSE = GLFW_FALSE;
-    public static final int VALUE_TRUE = GLFW_TRUE;
-    
+    /**
+     * The minimum window width that an instance of {@link WindowOptions} can have.
+     */
     public static final int CONSTANT_MIN_WINDOW_WIDTH = 64;
+    /**
+     * The minimum window height that an instance of {@link WindowOptions} can have.
+     */
     public static final int CONSTANT_MIN_WINDOW_HEIGHT = 64;
+    /**
+     * The minimum FOV that an instance of {@link WindowOptions} can have.
+     */
     public static final float CONSTANT_MIN_FOV = 10f;
+    /**
+     * The maximum FOV that an instance of {@link WindowOptions} can have.
+     */
     public static final float CONSTANT_MAX_FOV = 170f;
+    /**
+     * The minimum distance to the near Z-clipping plane that an instance of 
+     * {@link WindowOptions} can have.
+     */
     public static final float CONSTANT_MIN_ZNEAR_DIST = 0.01f;
+    /**
+     * The maximum distance to the far Z-clipping plane that an instance of 
+     * {@link WindowOptions} can have.
+     */
     public static final float CONSTANT_MAX_ZFAR_DIST = 10000f;
+    /**
+     * The minimum distance between the Z-clipping planes that an instance of 
+     * {@link WindowOptions} can have.
+     */
     public static final float CONSTANT_MIN_Z_DIST_SEPARATION = 1f;
-    
+
+    /** The value corresponding to an arrow shaped cursor. */
     public static final int CURSOR_ARROW = GLFW_ARROW_CURSOR;
+    /** The value corresponding to an I-beam shaped cursor. */
     public static final int CURSOR_IBEAM = GLFW_IBEAM_CURSOR;
+    /** The value corresponding to a crosshair shaped cursor. */
     public static final int CURSOR_CROSSHAIR = GLFW_CROSSHAIR_CURSOR;
+    /** The value corresponding to a hand shaped cursor. */
     public static final int CURSOR_HAND = GLFW_HAND_CURSOR;
+    /** The value corresponding to a horizontal resizing shaped cursor. */
     public static final int CURSOR_HRESIZE = GLFW_HRESIZE_CURSOR;
+    /** The value corresponding to a vertical resizing shaped cursor. */
     public static final int CURSOR_VRESIZE = GLFW_VRESIZE_CURSOR;
     
+    /** The {@link Identity} corresponding to the default texture. */
     public static final Identity DEFAULT_TEXTURE_ID = new Identity("default_texture").partial("core");
+    /** The {@link Identity} corresponding to the default 2D shader. */
     public static final Identity DEFAULT_SHADER_2D_ID = new Identity("default_shader_2D").partial("core");
+    /** The {@link Identity} corresponding to the default cubemap shader. */
     public static final Identity DEFAULT_SHADER_CUBE_ID = new Identity("default_shader_cubemap").partial("core");
+    /** The {@link Identity} corresponding to the default UI shader. */
     public static final Identity DEFAULT_SHADER_UI_ID = new Identity("default_shader_ui").partial("core");
+    /** The {@link Identity} corresponding to the skybox shader. */
+    public static final Identity SKYBOX_SHADER_ID = new Identity("skybox_shader").partial("core");
     
+    /** Status flag for if the graphics engine is currently initialized. */
     public static final int STATUS_INITIALIZED = 1;
+    /** Status flag for if the graphics engine can be (but currently isn't) initialized. */
     public static final int STATUS_INITIALIZABLE = 2;
+    /** Status flag for if V-Sync is enabled. */
     public static final int STATUS_VSYNC = 4;
     
     /**
@@ -168,13 +205,24 @@ public final class GraphicsEngine {
      */
     public static final ReentrantLock MESSAGE_LOCK = new ReentrantLock();
     
+    /** The {@link ReentrantLock} used by the status mutating/inquiring methods. */
     private static final ReentrantLock STATUS_LOCK = new ReentrantLock();
+    /** The status code. */
     private static byte status = STATUS_INITIALIZABLE;
-    private static long window, cursor;
+    /** The long value corresponding to the window. */
+    private static long window;
+    /** The long value corresponding to the cursor. */
+    private static long cursor;
     
+    /**
+     * The 2D position of the cursor, relative to the upper-left corner of the window. The
+     * units of these coordinates are measured in pixels. 
+     */
     private final static Vector2 cursorPos = new Vector2();
-    
+    /** The current {@link WindowOptions} the engine is currently using. */
     static WindowOptions windowOptions;
+    
+    /** The variable for containing the current thread that has the GL context. */
     private static Thread CONTEXT = null;
     
     /**
@@ -209,7 +257,7 @@ public final class GraphicsEngine {
         
         LOG.log(Level.FINEST, "global.Status.Init.Start", "Graphics engine");
         
-        glfwSetErrorCallback(GLFWErrorCallback.createPrint(new PrintStream(new LoggerOutputStream(LOG, Level.FINER))));
+        glfwSetErrorCallback((error, description) -> LOG.log(Level.FINER, String.format("[0x%X] %s", error, GLFWErrorCallback.getDescription(description))));
         
         if (!glfwInit()) {
             LOG.log(Level.SEVERE, "global.Status.Init.Failed", "GLFW");
@@ -217,16 +265,16 @@ public final class GraphicsEngine {
         }
         
         glfwDefaultWindowHints();
-        glfwWindowHint(GLFW_VISIBLE, VALUE_FALSE);
-        glfwWindowHint(GLFW_RESIZABLE, VALUE_TRUE);
+        glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+        glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
         
-        window = glfwCreateWindow(initialWindowOptions.getWindowWidth(), initialWindowOptions.getWindowHeight(), "Void of Blue", VALUE_NULL, VALUE_NULL);
-        if (window == VALUE_NULL) {
+        window = glfwCreateWindow(initialWindowOptions.getWindowWidth(), initialWindowOptions.getWindowHeight(), "Void of Blue", 0, 0);
+        if (window == 0) {
             LOG.log(Level.SEVERE, "global.Status.Init.Failed", "Window");
             return;
         }
         
-        glfwSetWindowSizeLimits(window, CONSTANT_MIN_WINDOW_WIDTH, CONSTANT_MIN_WINDOW_HEIGHT, VALUE_DONT_CARE, VALUE_DONT_CARE);
+        glfwSetWindowSizeLimits(window, CONSTANT_MIN_WINDOW_WIDTH, CONSTANT_MIN_WINDOW_HEIGHT, GLFW_DONT_CARE, GLFW_DONT_CARE);
         
         int[] w = new int[1], h = new int[1];
         glfwGetWindowSize(window, w, h);
@@ -242,8 +290,8 @@ public final class GraphicsEngine {
         });
         
         glfwSetWindowSizeCallback(window, (_window, width, height) -> {
-            windowOptions.setWindowWidth(width);
-            windowOptions.setWindowHeight(height);
+            windowOptions.setWindowWidth(width, false);
+            windowOptions.setWindowHeight(height, false);
         });
         
         glfwSetCursorPosCallback(window, (_window, xpos, ypos) -> {
@@ -357,7 +405,7 @@ public final class GraphicsEngine {
         glfwSwapBuffers(window);
     }
     
-    static void setWindowDims(int windowWidth, int windowHeight) {
+    static void setWindowSize(int windowWidth, int windowHeight) {
         glfwSetWindowSize(window, windowWidth, windowHeight);
     }
     
@@ -2256,13 +2304,19 @@ public final class GraphicsEngine {
     /**
      * Selects the shader program that the currently selected renderable is assigned to.<p>
      * 
+     * Users must be careful when invoking this message on renderables assigned to the UI
+     * via {@link msgUIAssignRenderable()}, as a renderable that is part of the UI will
+     * <i>not</i> select the UI shader program. In other words, renderables within the UI
+     * system will be treated by this message as if they are not currently assigned to any
+     * shader program at all.<p>
+     * 
      * Note that this method communicates with the graphics thread, so it may have to
      * wait for space in the message queue. In addition, the returned
      * {@link CompletableFuture} should not be completed outside of the graphics thread.
      * 
      * @return a {@link CompletableFuture} object that completes with the unique id value
-     * of the selected shader program upon success (or completes with -1 if the selected 
-     * shader program is {@code null}), or is cancelled if:
+     * of the selected shader program upon success (or -1 if the selected shader program
+     * is {@code null}), or is cancelled if:
      * <ul>
      *  <li>the thread experienced an {@link InterruptedException} while
      * waiting for space in the message queue</li>
@@ -2285,6 +2339,12 @@ public final class GraphicsEngine {
      * that are not copied are the instance affine transformations of the renderable, as the
      * caller of this message will likely wish to set the instance number and transforms
      * themselves.<p>
+     * 
+     * Users must be careful when invoking this message on renderables assigned to the UI
+     * via {@link msgUIAssignRenderable()}, as a renderable that is part of the UI will
+     * <i>not</i> copy the UI shader program to the new instance. In other words,
+     * renderables within the UI system will be treated by this message as if they are not
+     * currently assigned to any shader program at all.<p>
      * 
      * Note that this method communicates with the graphics thread, so it may have to
      * wait for space in the message queue. In addition, the returned
@@ -2420,13 +2480,13 @@ public final class GraphicsEngine {
      * cleared directly prior to the rendering of the UI, so any renderable assigned to the
      * UI is always drawn over the top of the scene; for this reason, usage of this message
      * is preferred over using {@link msgShaderProgramAssignRenderable()} with the default
-     * UI shader selected.<p>
+     * UI shader.<p>
      * 
      * This method automatically unassigns the renderable from it's previous shader program,
      * if any. Any textures that are not of a compatible type with the UI shader program
      * will be automatically detached from the renderable upon rendering. Furthermore, the
-     * renderable will not indicate that it is assigned to a shader program; so usage of
-     * messages such as {@link msgRenderableCopy()} or
+     * renderable will not indicate that it is assigned to a shader program (as if it is not
+     * assigned at all); therefore, usage of messages such as {@link msgRenderableCopy()} or
      * {@link msgRenderableSelectShaderProgram()} should be made with caution.<p>
      * 
      * Note that this method communicates with the graphics thread, so it may have to

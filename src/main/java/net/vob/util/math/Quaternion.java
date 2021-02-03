@@ -379,7 +379,7 @@ public final class Quaternion extends Vector {
      * positive Z axis, or {@link POS_W} if:
      * <ul>
      *  <li>{@code up} is approximately zero</li>
-     *  <li>{@code source} and {@code dest} are approximately the same</li>
+     *  <li>{@code source} and {@code dest} are approximately equal</li>
      *  <li>{@code up} and the vector between {@code source} and {@code dest} are
      * parallel (i.e. their cross product is approximately zero)</li>
      * </ul>

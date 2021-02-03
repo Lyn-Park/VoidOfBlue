@@ -33,11 +33,14 @@ final class GLShader extends GLObject {
     static final GLShader DEFAULT_FRAG_CUBE = new GLShader(GraphicsEngine.DEFAULT_SHADER_CUBE_ID, GL20.GL_FRAGMENT_SHADER);
     static final GLShader DEFAULT_VERT_UI = new GLShader(GraphicsEngine.DEFAULT_SHADER_UI_ID, GL20.GL_VERTEX_SHADER);
     static final GLShader DEFAULT_FRAG_UI = new GLShader(GraphicsEngine.DEFAULT_SHADER_UI_ID, GL20.GL_FRAGMENT_SHADER);
+    static final GLShader SKYBOX_VERT = new GLShader(GraphicsEngine.SKYBOX_SHADER_ID, GL20.GL_VERTEX_SHADER);
+    static final GLShader SKYBOX_FRAG = new GLShader(GraphicsEngine.SKYBOX_SHADER_ID, GL20.GL_FRAGMENT_SHADER);
     
     static Set<GLShader> getDefaults() {
         return Sets.newHashSet(DEFAULT_VERT_2D, DEFAULT_FRAG_2D,
                                DEFAULT_VERT_CUBE, DEFAULT_FRAG_CUBE,
-                               DEFAULT_VERT_UI, DEFAULT_FRAG_UI);
+                               DEFAULT_VERT_UI, DEFAULT_FRAG_UI,
+                               SKYBOX_VERT, SKYBOX_FRAG);
     }
     
     final Identity id;

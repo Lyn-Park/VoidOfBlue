@@ -7,16 +7,12 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.concurrent.CountDownLatch;
 import java.util.logging.LogManager;
 import java.util.logging.Logger;
-import javafx.embed.swing.JFXPanel;
-import javax.swing.SwingUtilities;
 import net.vob.mods.ModManager;
 import net.vob.core.graphics.GraphicsEngine;
 import net.vob.core.graphics.WindowOptions;
 import net.vob.util.ArrayTree;
-import net.vob.util.Tree;
 import net.vob.util.logging.Level;
 import net.vob.util.logging.LocaleUtils;
 import net.vob.util.math.AffineTransformation;
@@ -109,16 +105,8 @@ public final class VoidOfBlue {
         LOG.log(Level.INFO, "VoidOfBlue.begin.Start");
         startTime = Instant.now();
         
-        CountDownLatch latch = new CountDownLatch(1);
-        SwingUtilities.invokeLater(() -> {
-            new JFXPanel();
-            latch.countDown();
-        });
-        
         GraphicsEngine.init(new WindowOptions(800, 640, 100, 80.0f, 0.1f, 100f), 10);
-        
         ModManager.loadModFiles();
-        latch.await();
     }
     
     private static void loop() throws Throwable {
@@ -184,10 +172,13 @@ public final class VoidOfBlue {
             
             // ------------------------------------------------- //
             
-            double s = Math.sin(getCurrentTime() / 3d) * 1.5d;
-            double c = Math.cos(getCurrentTime() / 3d) * 1.5d;
+            double t = getCurrentTime() / 3d;
             
-            camera.setTranslation(Vector3.FORWARD.mul(2));
+            double s = Math.sin(t * Math.PI) * 1.5d;
+            double c = Math.cos(t * Math.PI) * 1.5d;
+            
+            camera.setTranslation(Vector3.FORWARD.rotate(Quaternion.rotationQuaternion(Vector3.UP, t)).mul(3));
+            camera.setRotation(Quaternion.rotationQuaternion(camera.getTranslation().mul(-1), Vector3.ZERO, Vector3.UP));
             b1.setRotation(Quaternion.rotationQuaternion(Vector3.BACKWARD, s));
             b2.setRotation(Quaternion.rotationQuaternion(Vector3.BACKWARD, c));
             
@@ -202,6 +193,7 @@ public final class VoidOfBlue {
     }
     
     private static void end() throws Throwable {
+        ModManager.unloadModFiles();
         GraphicsEngine.close();
         
         LOG.log(Level.INFO, "VoidOfBlue.end.End");

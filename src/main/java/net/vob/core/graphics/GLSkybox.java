@@ -135,7 +135,7 @@ class GLSkybox extends GLObject {
             GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, 0);
         }
         
-        GLShaderProgram.DEFAULT_CUBE.bind();
+        GLShaderProgram.SKYBOX.bind();
         tex.bind();
         
         GL20.glEnableVertexAttribArray(GraphicsManager.SHADER_ATTRIBUTE_POSITION_INDEX);
@@ -154,7 +154,7 @@ class GLSkybox extends GLObject {
         GL30.glBindVertexArray(0);
         
         tex.unbind();
-        GLShaderProgram.DEFAULT_CUBE.unbind();
+        GLShaderProgram.SKYBOX.unbind();
         GL11.glEnable(GL11.GL_DEPTH_TEST);
     }
     
