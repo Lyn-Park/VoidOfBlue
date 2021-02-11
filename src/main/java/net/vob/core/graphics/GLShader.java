@@ -77,7 +77,7 @@ final class GLShader extends GLObject {
         
         try (InputStream is = id.getLastInputStream(sType, "shader")) {
             if (is == null)
-                throw new IOException(LocaleUtils.format("global.Exception.SourceNotFound", id.toString()));
+                throw new IOException(LocaleUtils.format("global.Exception.SourceNotFound", String.format("%s, shader type %s", id.toString(), sType)));
 
             shd = GL20.glCreateShader(type);
             buildShader(is);

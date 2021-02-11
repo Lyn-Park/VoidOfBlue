@@ -23,13 +23,17 @@ void main()
 {
     vec4 posVec = vec4(in_Position, 1.0);
 
-    if (weight_rows > 0) {
+    if (weight_rows > 0)
+    {
         uint offset = gl_VertexID * weight_columns;
+        mat4 sum = mat4(0.0);
 
         for(uint i = 0; i < weight_columns; ++i)
         {
-            posVec += bones[i] * weights[offset + i] * posVec;
+            sum += bones[i] * weights[offset + i];
         }
+
+        posVec = sum * posVec;
     }
 
     gl_Position = instance_ProjectionViewModelMatrix * posVec;

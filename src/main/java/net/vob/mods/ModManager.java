@@ -214,7 +214,7 @@ public final class ModManager {
             .forEachOrdered((entry) -> {
                     Mod mod = entry.getValue();
                     try {
-                        mod.entrypoint.mainBegin();
+                        mod.entrypoint.mainFinish();
                         ++i[0];
                     } catch (Throwable e) {
                         LOG.log(Level.FINER, LocaleUtils.format("ModpackManager.unloadModFiles.ModException", mod.name, mod.modid, mod.version), e);

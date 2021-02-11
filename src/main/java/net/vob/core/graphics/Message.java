@@ -37,7 +37,6 @@ final class Message {
         AffineTransformation[] AFFINE_TRANSFORMATION_ARR;
         Tree<? extends AffineTransformation, ?> AFFINE_TRANSFORMATION_TREE;
         Matrix MATRIX;
-        WindowOptions WINDOW_OPTIONS;
         Identity IDENTITY_0, IDENTITY_1, IDENTITY_2, IDENTITY_3, IDENTITY_4, IDENTITY_5;
         BufferedImage BUFFERED_IMAGE_0, BUFFERED_IMAGE_1, BUFFERED_IMAGE_2, BUFFERED_IMAGE_3, BUFFERED_IMAGE_4, BUFFERED_IMAGE_5;
         Vector3[] VECTOR3_ARR_0, VECTOR3_ARR_1, VECTOR3_ARR_2;
@@ -49,17 +48,6 @@ final class Message {
         Integer o = 0;
 
         switch (type) {
-            case WINDOW_OPTIONS_SET:
-                WINDOW_OPTIONS = (WindowOptions)args[0];
-                
-                if (WINDOW_OPTIONS == null)
-                    o = null;
-                else {
-                    GraphicsEngine.windowOptions = WINDOW_OPTIONS;
-                    GraphicsEngine.setWindowSize(WINDOW_OPTIONS.getWindowWidth(), WINDOW_OPTIONS.getWindowHeight());
-                }
-                break;
-                
             case ENABLE_VSYNC:
                 GraphicsEngine.doEnableVSync();
                 break;
@@ -145,7 +133,7 @@ final class Message {
                 else
                     GraphicsManager.SELECTED_MESH.setRebuffer();
                 break;
-
+                
             case MESH_CLOSE:
                 if (GraphicsManager.SELECTED_MESH == null || GLMesh.getDefaults().contains(GraphicsManager.SELECTED_MESH))
                     o = null;
@@ -460,6 +448,45 @@ final class Message {
                 else
                     o = GLTexture.REGISTRY.get(GraphicsManager.SELECTED_TEXTURE);
                 break;
+                
+            case SKELETON_NEW:
+                AFFINE_TRANSFORMATION_TREE = (Tree<? extends AffineTransformation, ?>)args[0];
+                MATRIX = (Matrix)args[1];
+                
+                if (AFFINE_TRANSFORMATION_TREE == null || MATRIX == null || MATRIX.getNumRows() == 0 || MATRIX.getNumColumns() == 0)
+                    o = null;
+                else {
+                    GLSkeleton skeleton = new GLSkeleton(AFFINE_TRANSFORMATION_TREE, MATRIX);
+                    if (!GLSkeleton.REGISTRY.isRegistered(skeleton))
+                        skeleton.init();
+
+                    o = GLSkeleton.REGISTRY.register(skeleton);
+                    GraphicsManager.SELECTED_SKELETON = skeleton;
+                }
+                break;
+                
+            case SKELETON_SELECT:
+                INT = (int)args[0];
+                
+                GraphicsManager.SELECTED_SKELETON = GLSkeleton.REGISTRY.get(INT);
+                break;
+                
+            case SKELETON_CLOSE:
+                if (GraphicsManager.SELECTED_SKELETON == null)
+                    o = null;
+                else {
+                    GLSkeleton.REGISTRY.deregister(GraphicsManager.SELECTED_SKELETON);
+                    GraphicsManager.SELECTED_SKELETON.close();
+                    GraphicsManager.SELECTED_SKELETON = null;
+                }
+                break;
+                
+            case SKELETON_GET_ID:
+                if (GraphicsManager.SELECTED_SKELETON == null)
+                    o = null;
+                else
+                    o = GLSkeleton.REGISTRY.get(GraphicsManager.SELECTED_SKELETON);
+                break;
 
             case RENDERABLE_NEW:
                 INT = (int)args[0];
@@ -536,6 +563,20 @@ final class Message {
                     GraphicsManager.SELECTED_RENDERABLE.textures[INT] = null;
                 break;
                 
+            case RENDERABLE_ATTACH_SKELETON:
+                if (GraphicsManager.SELECTED_RENDERABLE == null || GraphicsManager.SELECTED_SKELETON == null)
+                    o = null;
+                else
+                    GraphicsManager.SELECTED_RENDERABLE.skeleton = GraphicsManager.SELECTED_SKELETON;
+                break;
+                
+            case RENDERABLE_DETACH_SKELETON:
+                if (GraphicsManager.SELECTED_RENDERABLE == null)
+                    o = null;
+                else
+                    GraphicsManager.SELECTED_RENDERABLE.skeleton = null;
+                break;
+                
             case RENDERABLE_SET_INSTANCES:
                 INT = (int)args[0];
                 
@@ -581,44 +622,6 @@ final class Message {
                     o = null;
                 else
                     GraphicsManager.SELECTED_RENDERABLE.instanceTransforms[INT] = AFFINE_TRANSFORMATION.getAsUnmodifiable(true);
-                break;
-                
-            case RENDERABLE_SET_SKELETON:
-                AFFINE_TRANSFORMATION_TREE = (Tree<? extends AffineTransformation, ?>)args[0];
-                MATRIX = (Matrix)args[1];
-                
-                if (GraphicsManager.SELECTED_RENDERABLE == null || AFFINE_TRANSFORMATION_TREE == null || MATRIX == null ||
-                    MATRIX.getNumRows() == 0 || MATRIX.getNumColumns() == 0)
-                    o = null;
-                else {
-                    MATRIX = new Matrix(MATRIX);
-                    
-                    for (int r = 0; r < MATRIX.getNumRows(); ++r) {
-                        double sum = 0;
-                        for (int c = 0; c < MATRIX.getNumColumns(); ++c)
-                            sum += MATRIX.getElement(r, c);
-
-                        if (sum == 0)
-                            o = null;
-
-                        for (int c = 0; c < MATRIX.getNumColumns(); ++c)
-                            MATRIX.setElement(r, c, MATRIX.getElement(r, c) / sum);
-                    }
-
-                    GraphicsManager.SELECTED_RENDERABLE.weights = MATRIX;
-                    GraphicsManager.SELECTED_RENDERABLE.weights.immutable();
-                    GraphicsManager.SELECTED_RENDERABLE.skeleton = Trees.unmodifiableTree(AFFINE_TRANSFORMATION_TREE);
-                    GraphicsManager.SELECTED_RENDERABLE.rebufferSkeletonBuffers();
-                }
-                break;
-                
-            case RENDERABLE_REMOVE_SKELETON:
-                if (GraphicsManager.SELECTED_RENDERABLE == null)
-                    o = null;
-                else {
-                    GraphicsManager.SELECTED_RENDERABLE.skeleton = null;
-                    GraphicsManager.SELECTED_RENDERABLE.weights = null;
-                }
                 break;
                 
             case RENDERABLE_SELECT_MESH:
@@ -715,7 +718,7 @@ final class Message {
     }
     
     static enum Type {
-        WINDOW_OPTIONS_SET, ENABLE_VSYNC, DISABLE_VSYNC, ENABLE_DEBUGGING,
+        ENABLE_VSYNC, DISABLE_VSYNC, ENABLE_DEBUGGING,
         DISABLE_DEBUGGING, VIEWPORT_SET_TRANSFORM, SKYBOX_ENABLE,
         SKYBOX_DISABLE, SKYBOX_SET_TEXTURE,
         
@@ -742,12 +745,14 @@ final class Message {
         TEXTURE_SELECT, TEXTURE_SELECT_DEFAULT_2D, 
         TEXTURE_SELECT_DEFAULT_CUBE, TEXTURE_CLOSE, TEXTURE_GET_ID,
         
+        SKELETON_NEW, SKELETON_SELECT, SKELETON_CLOSE, SKELETON_GET_ID,
+        
         RENDERABLE_NEW, RENDERABLE_NEW_TRANSFORMS, RENDERABLE_SELECT,
         RENDERABLE_CLOSE, RENDERABLE_ATTACH_MESH,
         RENDERABLE_ATTACH_TEXTURE, RENDERABLE_DETACH_TEXTURE,
-        RENDERABLE_DETACH_TEXTURE_UNIT, RENDERABLE_SET_INSTANCES,
+        RENDERABLE_DETACH_TEXTURE_UNIT, RENDERABLE_ATTACH_SKELETON,
+        RENDERABLE_DETACH_SKELETON, RENDERABLE_SET_INSTANCES,
         RENDERABLE_SET_INSTANCE_TRANSFORMS, RENDERABLE_SET_INSTANCE_TRANSFORM,
-        RENDERABLE_SET_SKELETON, RENDERABLE_REMOVE_SKELETON,
         RENDERABLE_SELECT_MESH, RENDERABLE_SELECT_TEXTURE,
         RENDERABLE_SELECT_SHADER_PROGRAM, RENDERABLE_COPY, RENDERABLE_GET_ID,
         

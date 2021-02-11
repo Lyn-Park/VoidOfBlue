@@ -161,10 +161,10 @@ class GLSkybox extends GLObject {
     private static void bufferSkyboxMatrices() {
         BUFFER.clear();
         
-        double s = (GraphicsEngine.windowOptions.getZFarDist() + GraphicsEngine.windowOptions.getZNearDist()) / 2d;
+        double s = (GraphicsEngine.getZFarDist() + GraphicsEngine.getZNearDist()) / 2d;
         Matrix model = Matrix.getScalingMatrix(new Vector3(s, s, s));
         
-        Matrix pvm = GraphicsManager.PROJ_MATRIX
+        Matrix pvm = GraphicsEngine.PROJ_MATRIX
                                     .mul(Matrix.getRotationMatrix(GraphicsManager.VIEW_TRANSFORM.getRotation().conjugate()))
                                     .mul(model);
         

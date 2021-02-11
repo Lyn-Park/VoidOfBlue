@@ -17,13 +17,16 @@ import net.vob.util.math.AffineTransformation;
 import net.vob.util.Input;
 import net.vob.util.Tree;
 import net.vob.util.Trees;
+import net.vob.util.math.Maths;
 import net.vob.util.math.Matrix;
+import org.lwjgl.PointerBuffer;
+import org.lwjgl.glfw.GLFW;
 
 import static org.lwjgl.glfw.GLFW.*;
 import org.lwjgl.opengl.GL11;
 
 /**
- * The static manager class for the window. This extends to not only handling GLFW and
+ * The static manager class for a single window. This extends to not only handling GLFW and
  * its functionality, but also providing several methods to allow other threads to
  * interface with the {@code GraphicsManager} class in a thread-safe way; essentially,
  * this class is the public interface of the graphics engine through which all external
@@ -56,7 +59,9 @@ import org.lwjgl.opengl.GL11;
  * of remaining as duplicate instances (e.g. 2 textures sourced using the same 
  * {@link Identity} will not instantiate 2 texture objects, but will instead be the same
  * texture data shared between them). This has the effect of saving memory on the GPU (this
- * effect is most prominent with textures).<p>
+ * effect is most prominent with textures). It also allows for external classes to handle
+ * GL objects by passing around integer ID values, as opposed to exposing these objects as
+ * public.<p>
  * 
  * GL objects exist in a hierarchy, of sorts. This hierarchy closely follows theoretical
  * relations between objects, and serves to simplify the operation of the
@@ -102,6 +107,14 @@ import org.lwjgl.opengl.GL11;
  * <ul>
  *  <li>This manager must be initialized before any use, and closed before the program is
  * shutdown to free up system resources and prevent memory leaking.</li>
+ *  <li>The projection matrix used for rendering and any related parameters are contained
+ * here rather than in {@code GraphicsManager}. This design choice was chosen to separate
+ * certain elements from each other to reduce confusion; specifically, this design separates
+ * the projection matrix (found here) from the view matrix (found in {@code GraphicsManager}).
+ * This is also due to the intended purpose of this class, which is to contain any
+ * information regarding the window/viewport itself separately from any information used
+ * directly for rendering (as the projection matrix is built entirely on the parameters of
+ * the viewport).</li>
  *  <li>The graphics engine, when passed an {@link AffineTransformation} via any messaging
  * function, relies on the dirty flags of these transformations to know when to update the
  * GPU buffers; thus, outside threads should take care when calling one of the
@@ -123,7 +136,19 @@ public final class GraphicsEngine {
      */
     private GraphicsEngine() {}
     
+    
+    
+    // --- CONSTANTS ---
+    
+    
+    
     private static final Logger LOG = VoidOfBlue.getLogger(GraphicsEngine.class);
+    
+    /**
+     * A value that certain function parameters can take, which signals that the
+     * parameter should be ignored.
+     */
+    public static final int VALUE_DONT_CARE = GLFW_DONT_CARE;
     
     /**
      * The minimum window width that an instance of {@link WindowOptions} can have.
@@ -173,7 +198,7 @@ public final class GraphicsEngine {
     /** The {@link Identity} corresponding to the default texture. */
     public static final Identity DEFAULT_TEXTURE_ID = new Identity("default_texture").partial("core");
     /** The {@link Identity} corresponding to the default 2D shader. */
-    public static final Identity DEFAULT_SHADER_2D_ID = new Identity("default_shader_2D").partial("core");
+    public static final Identity DEFAULT_SHADER_2D_ID = new Identity("default_shader_2d").partial("core");
     /** The {@link Identity} corresponding to the default cubemap shader. */
     public static final Identity DEFAULT_SHADER_CUBE_ID = new Identity("default_shader_cubemap").partial("core");
     /** The {@link Identity} corresponding to the default UI shader. */
@@ -187,6 +212,15 @@ public final class GraphicsEngine {
     public static final int STATUS_INITIALIZABLE = 2;
     /** Status flag for if V-Sync is enabled. */
     public static final int STATUS_VSYNC = 4;
+    
+    /** Status flag for if the projection matrix must be recalculated. */
+    private static final int STATUS_PROJECTION_DIRTY = 8;
+    /** Status flag for if the GLFW window resizing function should be called. */
+    private static final int STATUS_UPDATE_WINDOW_SIZE = 16;
+    /** Status flag for if the window is in fullscreen mode. */
+    private static final int STATUS_FULLSCREEN = 32;
+    /** Status flag for if the fullscreen mode was changed on the previous render cycle. */
+    private static final int STATUS_FULLSCREEN_DIRTY = 64;
     
     /**
      * The messaging lock for the window manager.<p>
@@ -207,23 +241,57 @@ public final class GraphicsEngine {
     
     /** The {@link ReentrantLock} used by the status mutating/inquiring methods. */
     private static final ReentrantLock STATUS_LOCK = new ReentrantLock();
+    
+    /** The {@link ReentrantLock} used by the projection matrix mutating/inquiring methods. */
+    private static final ReentrantLock PROJECTION_LOCK = new ReentrantLock();
+    
+    
+    
+    // --- FIELDS ---
+    
+    
+    
     /** The status code. */
-    private static byte status = STATUS_INITIALIZABLE;
+    private static byte status = STATUS_INITIALIZABLE | STATUS_PROJECTION_DIRTY | STATUS_UPDATE_WINDOW_SIZE;
     /** The long value corresponding to the window. */
     private static long window;
     /** The long value corresponding to the cursor. */
     private static long cursor;
+    /** The int value for the X-coordinate of the window. */
+    private static int _x;
+    /** The int value for the Y-coordinate of the window. */
+    private static int _y;
+    
+    /** The int value for the width of the window in screen coordinates. */
+    private static int _width;
+    /** The int value for the height of the window in screen coordinates. */
+    private static int _height;
+    /** The int value for the depth of the window in screen coordinates. */
+    private static int _depth;
+    /** The float value for the FOV of the viewport. */
+    private static float _fov;
+    /** The float value for the distance from the camera of the near Z-clipping plane. */
+    private static float _zNearDist;
+    /** The float value for the distance from the camera of the far Z-clipping plane. */
+    private static float _zFarDist;
+    
+    /** The projection matrix instance. */
+    static final Matrix PROJ_MATRIX = new Matrix(4);
     
     /**
      * The 2D position of the cursor, relative to the upper-left corner of the window. The
      * units of these coordinates are measured in pixels. 
      */
-    private final static Vector2 cursorPos = new Vector2();
-    /** The current {@link WindowOptions} the engine is currently using. */
-    static WindowOptions windowOptions;
+    private static final Vector2 cursorPos = new Vector2();
     
     /** The variable for containing the current thread that has the GL context. */
     private static Thread CONTEXT = null;
+    
+    
+    
+    // --- FUNCTIONS ---
+    
+    
     
     /**
      * Initializes the graphics engine, including this manager and {@code GraphicsManager}.<p>
@@ -241,17 +309,44 @@ public final class GraphicsEngine {
      * graphical rendering algorithm with a periodicity of {@code graphicsLoopPeriodMS};
      * in other words, this is the target time between the scheduling of two consecutive
      * rendering invocations. In addition, it is initialized to have no currently selected
-     * objects (see the javadocs of the {@code wmXXXSelect(index)} functions for more
-     * information on object selecting).
+     * objects (see the javadocs of the {@code msgXXXSelect(index)} functions for more
+     * information on object selecting).<p>
      * 
-     * @param initialWindowOptions the {@link WindowOptions} object to use for the initial
-     * window options
+     * Other than {@code graphicsLoopPeriodMS}, each parameter defines the initial status
+     * of the window. See the javadocs on the getter methods for more information on the
+     * meaning of each parameter, and each setter methods for more information on clamping
+     * of the values to within certain ranges.
+     * 
+     * @param windowX the positional X-coordinate of the window, or {@link VALUE_DONT_CARE}
+     * to signal that the window should be aligned with the centre of the screen along the
+     * X-axis
+     * @param windowY the positional Y-coordinate of the window, or {@link VALUE_DONT_CARE}
+     * to signal that the window should be aligned with the centre of the screen along the
+     * Y-axis
+     * @param windowWidth the width of the window
+     * @param windowHeight the height of the window
+     * @param windowDepth the depth of the window
+     * @param fov the FOV of the viewport
+     * @param zNearDist the near clipping plane distance
+     * @param zFarDist the far clipping plane distance
+     * @param fullscreen {@code true} is these options are in fullscreen mode,
+     * {@code false} if they are in windowed mode
      * @param graphicsLoopPeriodMS the target length, in milliseconds, between invocations
      * of the graphical loop in the graphics thread
      * @throws InterruptedException if this thread is interrupted while waiting for the
      * graphics thread to be initialized
      */
-    public static void init(WindowOptions initialWindowOptions, int graphicsLoopPeriodMS) throws InterruptedException {
+    public static void init(int windowX,
+                            int windowY,
+                            int windowWidth,
+                            int windowHeight,
+                            int windowDepth,
+                            float fov,
+                            float zNearDist,
+                            float zFarDist,
+                            boolean fullscreen,
+                            int graphicsLoopPeriodMS) throws InterruptedException
+    {
         if (!getStatus(STATUS_INITIALIZABLE))
             return;
         
@@ -268,7 +363,7 @@ public final class GraphicsEngine {
         glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
         glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
         
-        window = glfwCreateWindow(initialWindowOptions.getWindowWidth(), initialWindowOptions.getWindowHeight(), "Void of Blue", 0, 0);
+        window = glfwCreateWindow(windowWidth, windowHeight, "Void of Blue", fullscreen ? glfwGetPrimaryMonitor() : 0, 0);
         if (window == 0) {
             LOG.log(Level.SEVERE, "global.Status.Init.Failed", "Window");
             return;
@@ -280,7 +375,8 @@ public final class GraphicsEngine {
         glfwGetWindowSize(window, w, h);
         
         GLFWVidMode vidMode = glfwGetVideoMode(glfwGetPrimaryMonitor());
-        glfwSetWindowPos(window, (vidMode.width() - w[0]) / 2, (vidMode.height() - h[0]) / 2);
+        glfwSetWindowPos(window, windowX == VALUE_DONT_CARE ? (vidMode.width() - w[0]) / 2 : windowX,
+                                 windowY == VALUE_DONT_CARE ? (vidMode.height() - h[0]) / 2 : windowY);
         
         LOG.log(Level.FINEST, "GraphicsEngine.init.WindowInit", new Object[] { w[0], h[0] });
         
@@ -289,14 +385,21 @@ public final class GraphicsEngine {
             VoidOfBlue.stopProgram();
         });
         
+        glfwSetWindowPosCallback(window, (_window, xpos, ypos) -> {
+            _x = xpos;
+            _y = ypos;
+        });
+        
         glfwSetWindowSizeCallback(window, (_window, width, height) -> {
-            windowOptions.setWindowWidth(width, false);
-            windowOptions.setWindowHeight(height, false);
+            if (!getStatus(STATUS_FULLSCREEN)) {
+                setWindowWidth(width, false);
+                setWindowHeight(height, false);
+            }
         });
         
         glfwSetCursorPosCallback(window, (_window, xpos, ypos) -> {
             cursorPos.setX(xpos);
-            cursorPos.setY(windowOptions.getWindowHeight() - ypos);
+            cursorPos.setY(getWindowHeight() - ypos);
             
             Input input = new Input(Input.Source.MOUSE, cursorPos, 0, 0, 0);
             
@@ -312,6 +415,18 @@ public final class GraphicsEngine {
         glfwSetKeyCallback(window, (_window, key, scancode, action, mods) -> {
             Input input = new Input(Input.Source.KEY, null, key, scancode, action);
             
+            if (key == GLFW.GLFW_KEY_ESCAPE && action == GLFW.GLFW_RELEASE)
+                VoidOfBlue.stopProgram();
+            if (key == GLFW.GLFW_KEY_F && action == GLFW.GLFW_RELEASE) {
+                PROJECTION_LOCK.lock();
+                
+                try {
+                    toggleStatus(STATUS_FULLSCREEN);
+                    setStatus(STATUS_PROJECTION_DIRTY | STATUS_FULLSCREEN_DIRTY, true);
+                } finally {
+                    PROJECTION_LOCK.unlock();
+                }
+            }
             // TODO - pass input to other areas
         });
         
@@ -323,17 +438,25 @@ public final class GraphicsEngine {
         
         cursor = glfwCreateStandardCursor(CURSOR_ARROW);
         glfwSetCursor(window, cursor);
-        
-        windowOptions = initialWindowOptions;
         glfwShowWindow(window);
         
         setStatus(STATUS_INITIALIZABLE, false);
         setStatus(STATUS_INITIALIZED, true);
         
+        _x = windowX;
+        _y = windowY;
+        _width = windowWidth;
+        _height = windowHeight;
+        _depth = windowDepth;
+        _fov = fov;
+        _zNearDist = zNearDist;
+        _zFarDist = zFarDist;
+        setStatus(STATUS_FULLSCREEN, fullscreen);
+        
         GraphicsManager.init(graphicsLoopPeriodMS);
         GraphicsManager.INIT_LATCH.await();
         
-        if (GraphicsEngine.getStatus(GraphicsEngine.STATUS_INITIALIZED))
+        if (GraphicsManager.getStatus(GraphicsManager.STATUS_INITIALIZED))
             LOG.log(Level.FINEST, "global.Status.Init.End", "Graphics engine");
     }
     
@@ -392,6 +515,15 @@ public final class GraphicsEngine {
         }
     }
     
+    static void toggleStatus(int statusCode) {
+        STATUS_LOCK.lock();
+        try {
+            status ^= statusCode;
+        } finally {
+            STATUS_LOCK.unlock();
+        }
+    }
+    
     static void makeContextCurrent() {
         glfwMakeContextCurrent(window);
         CONTEXT = Thread.currentThread();
@@ -407,6 +539,60 @@ public final class GraphicsEngine {
     
     static void setWindowSize(int windowWidth, int windowHeight) {
         glfwSetWindowSize(window, windowWidth, windowHeight);
+    }
+    
+    static long getCurrentMonitor(boolean ignoreFullscreen) {
+        if (!ignoreFullscreen && getIsFullscreen())
+            return glfwGetWindowMonitor(window);
+        
+        PointerBuffer monitors = glfwGetMonitors();
+        if (monitors.remaining() == 0)
+            return -1;
+        else if (monitors.remaining() == 1)
+            return monitors.get(0);
+        
+        int ww, wh;
+        int[] mx = new int[1], my = new int[1];
+        int mw, mh;
+        int overlap, bestOverlap = 0;
+        
+        long bestMatch = -1;
+        GLFWVidMode mode;
+        
+        ww = getWindowWidth();
+        wh = getWindowHeight();
+        
+        for (int i = 0; i < monitors.remaining(); ++i) {
+            mode = glfwGetVideoMode(monitors.get(i));
+            glfwGetMonitorPos(monitors.get(i), mx, my);
+            mw = mode.width(); mh = mode.height();
+            
+            overlap = Math.max(0, Math.min(_x + ww, mx[0] + mw) - Math.max(_x, mx[0])) *
+                      Math.max(0, Math.min(_y + wh, my[0] + mh) - Math.max(_y, my[0]));
+            
+            if (bestOverlap < overlap) {
+                bestOverlap = overlap;
+                bestMatch = monitors.get(i);
+            }
+        }
+        
+        return bestMatch;
+    }
+    
+    static void getMonitorSize(long monitor, int[] width, int[] height) {
+        GLFWVidMode mode = glfwGetVideoMode(monitor);
+        width[0] = mode.width();
+        height[0] = mode.height();
+    }
+    
+    static void doEnableFullscreen() {
+        long monitor = getCurrentMonitor(true);
+        GLFWVidMode mode = glfwGetVideoMode(monitor);
+        glfwSetWindowMonitor(window, monitor, 0, 0, mode.width(), mode.height(), GLFW_DONT_CARE);
+    }
+    
+    static void doDisableFullscreen() {
+        glfwSetWindowMonitor(window, 0, _x, _y, getWindowWidth(), getWindowHeight(), GLFW_DONT_CARE);
     }
     
     static void doEnableVSync() {
@@ -481,8 +667,440 @@ public final class GraphicsEngine {
     public static void postEmptyEvent() {
         if (!getStatus(STATUS_INITIALIZED))
             throw new IllegalStateException(LocaleUtils.format("GraphicsEngine.NotInitialized"));
-            
+        
         glfwPostEmptyEvent();
+    }
+    
+    /**
+     * Gets the width of the window. This is the full graphical width of the window
+     * measured in pixels, <i>when the window is in windowed mode</i>. This means that
+     * this method will not return the true width of the window when it is in
+     * fullscreen mode.
+     * @return the width of the window
+     */
+    public static int getWindowWidth() {
+        PROJECTION_LOCK.lock();
+        
+        try {
+            return _width;
+        } finally {
+            PROJECTION_LOCK.unlock();
+        }
+    }
+    
+    /**
+     * Gets the height of the window. This is the full graphical height of the window
+     * measured in pixels, <i>when the window is in windowed mode</i>. This means that
+     * this method will not return the true height of the window when it is in
+     * fullscreen mode.
+     * @return the height of the window
+     */
+    public static int getWindowHeight() {
+        PROJECTION_LOCK.lock();
+        
+        try {
+            return _height;
+        } finally {
+            PROJECTION_LOCK.unlock();
+        }
+    }
+    
+    /**
+     * Gets the depth of the window. This depth is visible (along with the width and
+     * height) within shader programs as a {@code vec3} uniform value under the name
+     * {@link GraphicsManager#SHADER_UNIFORM_WINDOW_SIZE_NAME}; the exact meaning of
+     * the window 'depth' is thus shader-dependent (for example, the vanilla default
+     * UI shader uses these dimensions to define the window space as
+     * {@code [(0,0,0), (width, height, depth)]}).
+     * 
+     * @return the depth of the window
+     */
+    public static int getWindowDepth() {
+        PROJECTION_LOCK.lock();
+        
+        try {
+            return _depth;
+        } finally {
+            PROJECTION_LOCK.unlock();
+        }
+    }
+    
+    /**
+     * Gets the window FOV. The viewing area of the window is shaped like a
+     * <a href="https://en.wikipedia.org/wiki/Frustum">frustum</a>, with the camera
+     * itself placed at its pinnacle. The FOV, or Field-Of-View, is defined to be the
+     * angle between the faces of the viewing frustum corresponding to the top and bottom
+     * edges of the viewport.
+     * @return the FOV of the window
+     */
+    public static float getFOV() {
+        PROJECTION_LOCK.lock();
+        
+        try {
+            return _fov;
+        } finally {
+            PROJECTION_LOCK.unlock();
+        }
+    }
+    
+    /**
+     * Gets the distance of the near clipping plane. The near clipping plane is
+     * parallel to the camera viewing plane, and only fragments 'behind' it (from the
+     * viewpoint of the camera) are rendered; any other fragments are discarded
+     * (clipped). The distance is measured from the camera to this plane.
+     * 
+     * @return the distance of the near clipping plane
+     */
+    public static float getZNearDist() {
+        PROJECTION_LOCK.lock();
+        
+        try {
+            return _zNearDist;
+        } finally {
+            PROJECTION_LOCK.unlock();
+        }
+    }
+    
+    /**
+     * Gets the distance of the far clipping plane. The far clipping plane is parallel
+     * to the camera viewing plane, and only fragments 'in front' of it (from the
+     * viewpoint of the camera) are rendered; any other fragments are discarded 
+     * (clipped). The distance is measured from the camera to this plane.
+     * 
+     * @return the distance of the far clipping plane
+     */
+    public static float getZFarDist() {
+        PROJECTION_LOCK.lock();
+        
+        try {
+            return _zFarDist;
+        } finally {
+            PROJECTION_LOCK.unlock();
+        }
+    }
+    
+    /**
+     * Gets whether the window is fullscreen or not.
+     * @return {@code true} if the window is in fullscreen mode, {@code false}
+     * otherwise
+     */
+    public static boolean getIsFullscreen() {
+        PROJECTION_LOCK.lock();
+        
+        try {
+            return getStatus(STATUS_FULLSCREEN);
+        } finally {
+            PROJECTION_LOCK.unlock();
+        }
+    }
+    
+    /**
+     * Sets the width of the window. This value is clamped such that it is always
+     * greater than or equal to {@link CONSTANT_MIN_WINDOW_WIDTH}.
+     * @param width the new window width
+     * @throws IllegalStateException if the manager has not been initialized, i.e. the
+     * {@link STATUS_INITIALIZED} status flag is not set
+     */
+    public static void setWindowWidth(int width) {
+        if (!getStatus(STATUS_INITIALIZED))
+            throw new IllegalStateException(LocaleUtils.format("GraphicsEngine.NotInitialized"));
+        
+        setWindowWidth(width, true);
+    }
+    
+    static void setWindowWidth(int width, boolean updateWindow) {
+        PROJECTION_LOCK.lock();
+        
+        try {
+            if (width < CONSTANT_MIN_WINDOW_WIDTH)
+                width = CONSTANT_MIN_WINDOW_WIDTH;
+
+            _width = width;
+            setStatus(STATUS_PROJECTION_DIRTY, true);
+            setStatus(STATUS_UPDATE_WINDOW_SIZE, updateWindow);
+        } finally {
+            PROJECTION_LOCK.unlock();
+        }
+    }
+    
+    /**
+     * Sets the height of the window. This value is clamped such that it is always
+     * greater than or equal to {@link CONSTANT_MIN_WINDOW_HEIGHT}.
+     * @param height the new window height
+     * @throws IllegalStateException if the manager has not been initialized, i.e. the
+     * {@link STATUS_INITIALIZED} status flag is not set
+     */
+    public static void setWindowHeight(int height) {
+        if (!getStatus(STATUS_INITIALIZED))
+            throw new IllegalStateException(LocaleUtils.format("GraphicsEngine.NotInitialized"));
+        
+        setWindowHeight(height, true);
+    }
+    
+    static void setWindowHeight(int height, boolean updateWindow) {
+        PROJECTION_LOCK.lock();
+        
+        try {
+            if (height < CONSTANT_MIN_WINDOW_HEIGHT)
+                height = CONSTANT_MIN_WINDOW_HEIGHT;
+
+            _height = height;
+            setStatus(STATUS_PROJECTION_DIRTY, true);
+            setStatus(STATUS_UPDATE_WINDOW_SIZE, updateWindow);
+        } finally {
+            PROJECTION_LOCK.unlock();
+        }
+    }
+    
+    /**
+     * Sets the depth of the window. This value is clamped such that it is always
+     * greater than or equal to 1.
+     * @param depth the new window depth
+     * @throws IllegalStateException if the manager has not been initialized, i.e. the
+     * {@link STATUS_INITIALIZED} status flag is not set
+     */
+    public static void setWindowDepth(int depth) {
+        if (!getStatus(STATUS_INITIALIZED))
+            throw new IllegalStateException(LocaleUtils.format("GraphicsEngine.NotInitialized"));
+        
+        PROJECTION_LOCK.lock();
+        
+        try {
+            if (depth < 1)
+                depth = 1;
+
+            _depth = depth;
+        } finally {
+            PROJECTION_LOCK.unlock();
+        }
+    }
+    
+    /**
+     * Sets the FOV of the window. This value is clamped such that it is in the range
+     * [{@link CONSTANT_MIN_FOV}, {@link CONSTANT_MAX_FOV}], inclusive.
+     * @param fov the new window FOV
+     * @throws IllegalStateException if the manager has not been initialized, i.e. the
+     * {@link STATUS_INITIALIZED} status flag is not set
+     */
+    public static void setFOV(float fov) {
+        if (!getStatus(STATUS_INITIALIZED))
+            throw new IllegalStateException(LocaleUtils.format("GraphicsEngine.NotInitialized"));
+        
+        PROJECTION_LOCK.lock();
+        
+        try {
+            _fov = Maths.clamp(CONSTANT_MIN_FOV, fov, CONSTANT_MAX_FOV);
+            setStatus(STATUS_PROJECTION_DIRTY, true);
+        } finally {
+            PROJECTION_LOCK.unlock();
+        }
+    }
+    
+    /**
+     * Sets the distances of the clipping planes of the window. Initially, each distance
+     * is clamped such that:
+     * <blockquote><pre>
+     *  {@link CONSTANT_MIN_ZNEAR_DIST} {@code <= zNearDist <= }{@link CONSTANT_MAX_ZFAR_DIST} {@code - }{@link CONSTANT_MIN_Z_DIST_SEPARATION}
+     *  {@link CONSTANT_MIN_ZNEAR_DIST} {@code + }{@link CONSTANT_MIN_Z_DIST_SEPARATION} {@code <= zFarDist <= }{@link CONSTANT_MAX_ZFAR_DIST}</pre></blockquote>
+     * Then {@code zNearDist} is further clamped such that it is always less than or
+     * equal to {@code zFarDist - }{@link CONSTANT_MIN_Z_DIST_SEPARATION}.
+     * 
+     * @param zNearDist the new near clipping plane distance
+     * @param zFarDist the new far clipping plane distance
+     * @throws IllegalStateException if the manager has not been initialized, i.e. the
+     * {@link STATUS_INITIALIZED} status flag is not set
+     */
+    public static void setZDists(float zNearDist, float zFarDist) {
+        if (!getStatus(STATUS_INITIALIZED))
+            throw new IllegalStateException(LocaleUtils.format("GraphicsEngine.NotInitialized"));
+        
+        PROJECTION_LOCK.lock();
+        
+        try {
+            zNearDist = Maths.clamp(CONSTANT_MIN_ZNEAR_DIST, zNearDist, CONSTANT_MAX_ZFAR_DIST - CONSTANT_MIN_Z_DIST_SEPARATION);
+            zFarDist = Maths.clamp(CONSTANT_MIN_ZNEAR_DIST + CONSTANT_MIN_Z_DIST_SEPARATION, zFarDist, CONSTANT_MAX_ZFAR_DIST);
+
+            if (zNearDist > zFarDist - CONSTANT_MIN_Z_DIST_SEPARATION)
+                zNearDist = zFarDist - CONSTANT_MIN_Z_DIST_SEPARATION;
+
+            _zNearDist = zNearDist;
+            _zFarDist = zFarDist;
+            setStatus(STATUS_PROJECTION_DIRTY, true);
+        } finally {
+            PROJECTION_LOCK.unlock();
+        }
+    }
+    
+    /**
+     * Sets the distance of the near clipping plane. This value is clamped such that it
+     * is in the range
+     * [{@link CONSTANT_MIN_ZNEAR_DIST}, {@code zFarDist - }{@link CONSTANT_MIN_Z_DIST_SEPARATION}],
+     * inclusive.
+     * 
+     * @param zNearDist the new near clipping plane distance
+     * @throws IllegalStateException if the manager has not been initialized, i.e. the
+     * {@link STATUS_INITIALIZED} status flag is not set
+     */
+    public static void setZNearDist(float zNearDist) {
+        if (!getStatus(STATUS_INITIALIZED))
+            throw new IllegalStateException(LocaleUtils.format("GraphicsEngine.NotInitialized"));
+        
+        PROJECTION_LOCK.lock();
+        
+        try {
+            _zNearDist = Maths.clamp(CONSTANT_MIN_ZNEAR_DIST, zNearDist, _zFarDist - CONSTANT_MIN_Z_DIST_SEPARATION);
+            setStatus(STATUS_PROJECTION_DIRTY, true);
+        } finally {
+            PROJECTION_LOCK.unlock();
+        }
+    }
+    
+    /**
+     * Sets the distance of the far clipping plane. This value is clamped such that it
+     * is in the range
+     * [{@code zNearDist + }{@link CONSTANT_MIN_Z_DIST_SEPARATION}, {@link CONSTANT_MAX_ZFAR_DIST}],
+     * inclusive.
+     * 
+     * @param zFarDist the new far clipping plane distance
+     * @throws IllegalStateException if the manager has not been initialized, i.e. the
+     * {@link STATUS_INITIALIZED} status flag is not set
+     */
+    public static void setZFarDist(float zFarDist) {
+        if (!getStatus(STATUS_INITIALIZED))
+            throw new IllegalStateException(LocaleUtils.format("GraphicsEngine.NotInitialized"));
+        
+        PROJECTION_LOCK.lock();
+        
+        try {
+            _zFarDist = Maths.clamp(_zNearDist + CONSTANT_MIN_Z_DIST_SEPARATION, zFarDist, CONSTANT_MAX_ZFAR_DIST);
+            setStatus(STATUS_PROJECTION_DIRTY, true);
+        } finally {
+            PROJECTION_LOCK.unlock();
+        }
+    }
+    
+    /**
+     * Sets whether the window is fullscreen.
+     * @param isFullscreen {@code true} to set these options to fullscreen mode,
+     * {@code false} otherwise
+     * @throws IllegalStateException if the manager has not been initialized, i.e. the
+     * {@link STATUS_INITIALIZED} status flag is not set
+     */
+    public static void setIsFullscreen(boolean isFullscreen) {
+        if (!getStatus(STATUS_INITIALIZED))
+            throw new IllegalStateException(LocaleUtils.format("GraphicsEngine.NotInitialized"));
+        
+        PROJECTION_LOCK.lock();
+        
+        try {
+            setStatus(STATUS_FULLSCREEN, isFullscreen);
+            setStatus(STATUS_PROJECTION_DIRTY, true);
+            setStatus(STATUS_FULLSCREEN_DIRTY, true);
+        } finally {
+            PROJECTION_LOCK.unlock();
+        }
+    }
+    
+    /**
+     * Toggles whether the window is fullscreen.
+     * @throws IllegalStateException if the manager has not been initialized, i.e. the
+     * {@link STATUS_INITIALIZED} status flag is not set
+     */
+    public static void toggleIsFullscreen() {
+        if (!getStatus(STATUS_INITIALIZED))
+            throw new IllegalStateException(LocaleUtils.format("GraphicsEngine.NotInitialized"));
+        
+        PROJECTION_LOCK.lock();
+        
+        try {
+            toggleStatus(STATUS_FULLSCREEN);
+            setStatus(STATUS_PROJECTION_DIRTY, true);
+            setStatus(STATUS_FULLSCREEN_DIRTY, true);
+        } finally {
+            PROJECTION_LOCK.unlock();
+        }
+    }
+    
+    static boolean isProjectionDirty() {
+        PROJECTION_LOCK.lock();
+        
+        try {
+            return getStatus(STATUS_PROJECTION_DIRTY);
+        } finally {
+            PROJECTION_LOCK.unlock();
+        }
+    }
+    
+    /**
+     * Flushes any changes to the projection matrix and to the window.<p>
+     * 
+     * If the projection matrix is flagged as dirty, then the internally held projection
+     * matrix will be reloaded using the current window parameters; this will also flush
+     * any changes to the window width/height to GLFW so that the dimensions and viewport
+     * of the actual window match the current parameters.
+     */
+    static void flushProjectionMatrix() {
+        PROJECTION_LOCK.lock();
+        
+        try {
+            if (getStatus(STATUS_PROJECTION_DIRTY)) {
+                setStatus(STATUS_PROJECTION_DIRTY, false);
+
+                int width = _width, height = _height;
+
+                if (getStatus(STATUS_FULLSCREEN)) {
+                    int[] monitorWidth = new int[1], monitorHeight = new int[1];
+                    GraphicsEngine.getMonitorSize(GraphicsEngine.getCurrentMonitor(getStatus(STATUS_FULLSCREEN_DIRTY)), monitorWidth, monitorHeight);
+
+                    width = monitorWidth[0];
+                    height = monitorHeight[0];
+                }
+
+                double tanfov = Math.tan(Math.PI * _fov / 360d);
+                double frustrumlength = _zFarDist - _zNearDist;
+
+                PROJ_MATRIX.setElement(0, 0, height / (tanfov * width));
+                PROJ_MATRIX.setElement(1, 1, 1 / tanfov);
+                PROJ_MATRIX.setElement(2, 2, -(_zFarDist + _zNearDist) / frustrumlength);
+                PROJ_MATRIX.setElement(2, 3, -(2 * _zFarDist * _zNearDist) / frustrumlength);
+                PROJ_MATRIX.setElement(3, 2, -1);
+
+                if (getStatus(STATUS_FULLSCREEN_DIRTY)) {
+                    if (getStatus(STATUS_FULLSCREEN))
+                        doEnableFullscreen();
+                    else
+                        doDisableFullscreen();
+
+                    setStatus(STATUS_FULLSCREEN_DIRTY, false);
+                }
+
+                GL11.glViewport(0, 0, width, height);
+                if (getStatus(STATUS_UPDATE_WINDOW_SIZE))
+                    setWindowSize(width, height);
+
+                setStatus(STATUS_UPDATE_WINDOW_SIZE, true);
+            }
+            
+        } finally {
+            PROJECTION_LOCK.unlock();
+        }
+    }
+    
+    /**
+     * Sets the position of the window on the screen. This is defined to be the position,
+     * in screen coordinates, of the upper-left corner of the content area of the window.<p>
+     * 
+     * Note that this function will remember the given position, but will not directly
+     * affect the window if the window is in fullscreen mode. The graphics engine will
+     * instead restore the window to this position when it switches to windowed mode.
+     * 
+     * @param x the new X-coordinate of the window, or {@link VALUE_DONT_CARE} to keep
+     * the previous X-coordinate
+     * @param y the new Y-coordinate of the window, or {@link VALUE_DONT_CARE} to keep
+     * the previous Y-coordinate
+     */
+    public static void setWindowPos(int x, int y) {
+        glfwSetWindowPos(window, x, y);
     }
     
     /**
@@ -546,28 +1164,6 @@ public final class GraphicsEngine {
         }
         
         return message.future;
-    }
-    
-    /**
-     * Sets the window options to use.<p>
-     * 
-     * Note that this method communicates with the graphics thread, so it may have to
-     * wait for space in the message queue. In addition, the returned
-     * {@link CompletableFuture} should not be completed outside of the graphics thread.
-     * 
-     * @param options the new {@link WindowOptions} to use for the window
-     * @return a {@link CompletableFuture} object that completes with a value of 0 on
-     * success, or is cancelled if:
-     * <ul>
-     *  <li>the thread experienced an {@link InterruptedException} while waiting for space 
-     * in the message queue</li>
-     *  <li>{@code options} is {@code null}</li>
-     * </ul>
-     * @throws IllegalStateException if the manager has not been initialized, i.e. the
-     * {@link STATUS_INITIALIZED} status flag is not set
-     */
-    public static CompletableFuture<Integer> msgWindowOptionsSet(WindowOptions options) {
-        return enqueueMessage(new Message(Message.Type.WINDOW_OPTIONS_SET, options));
     }
     
     /**
@@ -1866,6 +2462,124 @@ public final class GraphicsEngine {
     }
     
     /**
+     * Instantiates and registers a new skeleton from the given parameters. This is defined
+     * to be a tree of {@link AffineTransformation} instances representing the 'bones' of
+     * the skeleton. These bones dictate how each vertex in a mesh should be transformed
+     * relative to the parent bone. Each vertex in the mesh is also assigned a series of
+     * 'weights' via the given matrix, which are used to create a weighted map between
+     * vertices and bones (e.g. a vertex on a joint may be under equal influence from both
+     * bones of the joint, and thus would have each corresponding weight set to 0.5). The
+     * weights are normalized so that each row sums to 1 prior to rendering. The new
+     * skeleton is automatically selected, allowing for further processing.<p><p>
+     * 
+     * This method thus allows meshes and renderables to be used for animation purposes.
+     * However, the exact method of combining the skeleton, weights and vertices together
+     * is left up to the renderable's current shader to perform. For reference, the
+     * graphics engine combines each skeleton transformation with it's parent <i>prior</i>
+     * to uploading to the GPU, and the weights are uploaded in row-major order.<p>
+     * 
+     * The skeleton will be automatically removed from any renderable it is attached to
+     * during a rendering cycle if the weight matrix is determined to be of invalid size for
+     * the renderable's mesh (the weight matrix must have an equal number of rows as the
+     * number of vertices in the mesh). In addition, the tree is set to be unmodifiable via
+     * {@link Trees#unmodifiableTree(Tree)} and the matrix is copied, so the weights and
+     * the structure of the skeleton cannot be altered (note however that the
+     * {@code AffineTransformation} instances within the skeleton can still be altered by
+     * outside threads).<p>
+     * 
+     * Note that this method communicates with the graphics thread, so it may have to
+     * wait for space in the message queue. In addition, the returned
+     * {@link CompletableFuture} should not be completed outside of the graphics thread.
+     * 
+     * @param skeleton the tree of affine transformation bones to use as the new skeleton
+     * @param weights the vertex-bone weights of the new skeleton. Each row of the weights
+     * corresponds to a vertex within the renderable's mesh, and each column of weights
+     * corresponds to a bone within the skeleton, where the bones are ordered using a
+     * {@linkplain Tree#preOrderWalk() pre-order walk}
+     * @return a {@link CompletableFuture} object that completes with the unique id value
+     * of the new skeleton upon success, or is cancelled if:
+     * <ul>
+     *  <li>the thread experienced an {@link InterruptedException} while
+     * waiting for space in the message queue</li>
+     *  <li>{@code skeleton} is {@code null}</li>
+     *  <li>{@code weights} is {@code null}</li>
+     *  <li>{@code weights} is an empty matrix (i.e. it has either 0 rows or 0 columns)</li>
+     *  <li>The number of columns in {@code weights} does not match the size of
+     * {@code skeleton}</li>
+     *  <li>Any row in {@code weights} sums to 0</li>
+     * </ul>
+     * @throws IllegalStateException if the manager has not been initialized, i.e. the
+     * {@link STATUS_INITIALIZED} status flag is not set
+     */
+    public static CompletableFuture<Integer> msgSkeletonNew(Tree<? extends AffineTransformation, ?> skeleton, Matrix weights) {
+        return enqueueMessage(new Message(Message.Type.SKELETON_NEW, skeleton, weights));
+    }
+    
+    /**
+     * Selects a skeleton. This loads the indexed skeleton into the state machine of the
+     * {@code GraphicsManager} class to allow for further processing; an invalid index will
+     * instead set the selected skeleton to {@code null}. This message does not, on it's
+     * own, affect the state of the {@code GraphicsManager} class in any other way.<p>
+     * 
+     * Note that this method communicates with the graphics thread, so it may have to
+     * wait for space in the message queue. In addition, the returned
+     * {@link CompletableFuture} should not be completed outside of the graphics thread.
+     * 
+     * @param index the index of the skeleton to select
+     * @return a {@link CompletableFuture} object that completes with a value of 0
+     * on success, or is cancelled if the thread experienced an {@link InterruptedException}
+     * while waiting for space in the message queue
+     * @throws IllegalStateException if the manager has not been initialized, i.e. the
+     * {@link STATUS_INITIALIZED} status flag is not set
+     */
+    public static CompletableFuture<Integer> msgSkeletonSelect(int index) {
+        return enqueueMessage(new Message(Message.Type.SKELETON_SELECT, index));
+    }
+    
+    /**
+     * Closes the currently selected skeleton. This removes it from the internal registry,
+     * and sets the selected skeleton to {@code null}.<p>
+     * 
+     * Note that this method communicates with the graphics thread, so it may have to
+     * wait for space in the message queue. In addition, the returned
+     * {@link CompletableFuture} should not be completed outside of the graphics thread.
+     * 
+     * @return a {@link CompletableFuture} object that completes with a value of 0
+     * on success, or is cancelled if:
+     * <ul>
+     *  <li>the thread experienced an {@link InterruptedException} while
+     * waiting for space in the message queue</li>
+     *  <li>the currently selected skeleton is {@code null}</li>
+     * </ul>
+     * @throws IllegalStateException if the manager has not been initialized, i.e. the
+     * {@link STATUS_INITIALIZED} status flag is not set
+     */
+    public static CompletableFuture<Integer> msgSkeletonClose() {
+        return enqueueMessage(new Message(Message.Type.SKELETON_CLOSE));
+    }
+    
+    /**
+     * Gets the unique integer id of the currently selected skeleton.<p>
+     * 
+     * Note that this method communicates with the graphics thread, so it may have to
+     * wait for space in the message queue. In addition, the returned
+     * {@link CompletableFuture} should not be completed outside of the graphics thread.
+     * 
+     * @return a {@link CompletableFuture} object that completes with the unique id value
+     * of the selected skeleton upon success, or is cancelled if:
+     * <ul>
+     *  <li>the thread experienced an {@link InterruptedException} while waiting for space 
+     * in the message queue</li>
+     *  <li>the currently selected skeleton is {@code null}</li>
+     * </ul>
+     * @throws IllegalStateException if the manager has not been initialized, i.e. the
+     * {@link STATUS_INITIALIZED} status flag is not set
+     */
+    public static CompletableFuture<Integer> msgSkeletonGetID() {
+        return enqueueMessage(new Message(Message.Type.SKELETON_GET_ID));
+    }
+    
+    /**
      * Instantiates and registers a new renderable. This is a container class that the
      * rendering loop uses to actually perform the rendering, and contains a mesh and
      * an array of textures. The new renderable can then be assigned to a shader program.
@@ -1955,7 +2669,7 @@ public final class GraphicsEngine {
      * wait for space in the message queue. In addition, the returned
      * {@link CompletableFuture} should not be completed outside of the graphics thread.
      * 
-     * @param index the index of the texture to select
+     * @param index the index of the renderable to select
      * @return a {@link CompletableFuture} object that completes with a value of 0
      * on success, or is cancelled if the thread experienced an {@link InterruptedException}
      * while waiting for space in the message queue
@@ -2178,63 +2892,30 @@ public final class GraphicsEngine {
     }
     
     /**
-     * Sets the current skeleton and weight matrix of the currently selected renderable.
+     * Attaches the currently selected skeleton to the currently selected renderable.
      * Removes the previous skeleton, if any.<p>
-     * 
-     * The skeleton of a renderable is defined to be a tree of affine transformations
-     * representing the 'bones' of the skeleton. These bones dictate how each vertex in the
-     * current mesh should be transformed relative to the parent bone. Each vertex in the
-     * renderable's mesh is also assigned a series of 'weights' via the given matrix, which
-     * are used to create a weighted map between vertices and bones (e.g. a vertex on a joint
-     * may be under equal influence from both bones of the joint, and thus would have each
-     * corresponding weight set to 0.5). The weights are normalized so that each row sums to
-     * 1 prior to rendering.<p>
-     * 
-     * This method thus allows meshes and renderables to be used for animation purposes.
-     * However, the exact method of combining the skeleton, weights and vertices together
-     * is left up to the renderable's current shader to perform. For reference, the
-     * graphics engine combines each skeleton transformation with it's parent <i>prior</i>
-     * to uploading to the GPU, and the weights are uploaded in row-major order.<p>
-     * 
-     * The skeleton and weights will be automatically removed from the renderable during
-     * <i>any</i> rendering cycle if the weight matrix is determined to be of invalid size
-     * (the weights must have an equal number of columns as the size of the skeleton tree,
-     * <i>and</i> an equal number of rows as the number of vertices in the current mesh), but
-     * will not cause the returned {@link CompletableFuture} from this method to be
-     * cancelled. This is due to the fact that the renderable's mesh can change at any time,
-     * and the graphics engine must handle this case gracefully. In addition, the tree is set
-     * to be unmodifiable via {@link Trees#unmodifiableTree(Tree)} and the matrix is copied,
-     * so the weights and the structure of the skeleton cannot be altered.<p>
      * 
      * Note that this method communicates with the graphics thread, so it may have to
      * wait for space in the message queue. In addition, the returned
      * {@link CompletableFuture} should not be completed outside of the graphics thread.
      * 
-     * @param skeleton the tree of affine transformation bones to use as the new skeleton
-     * @param weights the vertex-bone weights of the new skeleton. Each row of the weights
-     * corresponds to a vertex within the renderable's mesh, and each column of weights
-     * corresponds to a bone within the skeleton, where the bones are ordered using a
-     * {@linkplain Tree#preOrderWalk() pre-order walk}
      * @return a {@link CompletableFuture} object that completes with a value of 0
      * on success, or is cancelled if:
      * <ul>
      *  <li>the thread experienced an {@link InterruptedException} while
      * waiting for space in the message queue</li>
      *  <li>the currently selected renderable is {@code null}</li>
-     *  <li>{@code skeleton} is {@code null}</li>
-     *  <li>{@code weights} is {@code null}</li>
-     *  <li>{@code weights} is an empty matrix (i.e. it has either 0 rows or 0 columns)</li>
+     *  <li>the currently selected skeleton is {@code null}</li>
      * </ul>
      * @throws IllegalStateException if the manager has not been initialized, i.e. the
      * {@link STATUS_INITIALIZED} status flag is not set
      */
-    public static CompletableFuture<Integer> msgRenderableAttachSkeleton(Tree<? extends AffineTransformation, ?> skeleton, Matrix weights) {
-        return enqueueMessage(new Message(Message.Type.RENDERABLE_SET_SKELETON, skeleton, weights));
+    public static CompletableFuture<Integer> msgRenderableAttachSkeleton() {
+        return enqueueMessage(new Message(Message.Type.RENDERABLE_ATTACH_SKELETON));
     }
     
     /**
-     * Removes the current skeleton and weight matrix (if any) from the currently
-     * selected renderable.<p>
+     * Removes the current skeleton (if any) from the currently selected renderable.<p>
      * 
      * Note that this method communicates with the graphics thread, so it may have to
      * wait for space in the message queue. In addition, the returned
@@ -2250,8 +2931,8 @@ public final class GraphicsEngine {
      * @throws IllegalStateException if the manager has not been initialized, i.e. the
      * {@link STATUS_INITIALIZED} status flag is not set
      */
-    public static CompletableFuture<Integer> msgRenderableRemoveSkeleton() {
-        return enqueueMessage(new Message(Message.Type.RENDERABLE_REMOVE_SKELETON));
+    public static CompletableFuture<Integer> msgRenderableDetachSkeleton() {
+        return enqueueMessage(new Message(Message.Type.RENDERABLE_DETACH_SKELETON));
     }
     
     /**

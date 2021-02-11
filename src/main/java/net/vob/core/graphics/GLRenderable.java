@@ -1,19 +1,14 @@
 package net.vob.core.graphics;
 
-import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
-import java.util.Iterator;
-import net.vob.util.ArrayTree;
 import net.vob.util.Closable;
 import net.vob.util.Registry;
-import net.vob.util.Tree;
 import net.vob.util.logging.LocaleUtils;
 import net.vob.util.math.AffineTransformation;
 import net.vob.util.math.AffineTransformationImpl;
 import net.vob.util.math.Matrix;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL15;
-import org.lwjgl.opengl.GL43;
 
 /**
  * Container class for a mesh, array of textures, an affine transform, and a reference
@@ -60,11 +55,6 @@ import org.lwjgl.opengl.GL43;
 final class GLRenderable extends Closable {
     static final Registry<GLRenderable> REGISTRY = new Registry<>();
     
-    private static int skeletonSSBO = 0, weightSSBO = 0;
-    
-    Tree<AffineTransformation, ?> skeleton = null;
-    Matrix weights = null;
-    
     AffineTransformation[] instanceTransforms;
     boolean instanceNumDirty = true;
     private int ivbo;
@@ -72,6 +62,13 @@ final class GLRenderable extends Closable {
     GLMesh mesh = null;
     GLTexture[] textures = new GLTexture[GraphicsManager.MAX_COMBINED_TEXTURE_UNITS];
     GLShaderProgram program = null;
+    GLSkeleton skeleton = null;
+    
+    
+    
+    // --- CONSTRUCTORS ---
+    
+    
     
     /**
      * Constructs a new renderable, with space for the given number of instances
@@ -109,101 +106,11 @@ final class GLRenderable extends Closable {
             textures[i] = r.textures[i];
     }
     
-    /**
-     * Checks the skeleton parameters for validity. A return value of {@code false}
-     * indicates they are not valid.
-     * @return 
-     */
-    private boolean checkSkeleton() {
-        return skeleton.size() == weights.getNumColumns() &&
-               weights.getNumRows() == mesh.getNumVertices();
-    }
     
-    /**
-     * Rebuffers the skeleton uniform buffers. Deletes the old buffers, if they
-     * exist.
-     */
-    void rebufferSkeletonBuffers() {
-        GL15.glBindBuffer(GL43.GL_SHADER_STORAGE_BUFFER, 0);
-        if (skeletonSSBO > 0) {
-            closeSkeletonSSBO();
-        }
-        
-        FloatBuffer mBuf = BufferUtils.createFloatBuffer(skeleton.size() * 16);
-        
-        Tree<Matrix, ?> baseMatrixTree = new ArrayTree<>(skeleton.map((t) -> t.getTransformationMatrix(0)));
-        Iterator<? extends Tree<Matrix, ?>> bmtIt = baseMatrixTree.preOrderWalk();
-        
-        Tree<Matrix, ?> bone = bmtIt.next();
-        bone.getValue().writeToFloatBuffer(mBuf, true);
-        
-        while (bmtIt.hasNext()) {
-            bone = bmtIt.next();
-            Matrix boneMat = bone.getValue().mul(bone.getParent().getValue());
-            
-            boneMat.writeToFloatBuffer(mBuf, true);
-            bone.setValue(boneMat);
-        }
-        mBuf.flip();
-        
-        ByteBuffer wBuf = BufferUtils.createByteBuffer((2 * Integer.BYTES) + (weights.getElements().length * Float.BYTES));
-        wBuf.putInt(weights.getNumRows());
-        wBuf.putInt(weights.getNumColumns());
-        weights.writeToFloatBuffer(wBuf, false);
-        wBuf.flip();
-        
-        skeletonSSBO = GL15.glGenBuffers();
-        GL15.glBindBuffer(GL43.GL_SHADER_STORAGE_BUFFER, skeletonSSBO);
-        GL15.glBufferData(GL43.GL_SHADER_STORAGE_BUFFER, mBuf, GL15.GL_DYNAMIC_DRAW);
-        
-        weightSSBO = GL15.glGenBuffers();
-        GL15.glBindBuffer(GL43.GL_SHADER_STORAGE_BUFFER, weightSSBO);
-        GL15.glBufferData(GL43.GL_SHADER_STORAGE_BUFFER, wBuf, GL15.GL_DYNAMIC_DRAW);
-        GL15.glBindBuffer(GL43.GL_SHADER_STORAGE_BUFFER, 0);
-    }
     
-    /**
-     * Updates the transformation matrices for the skeleton. Does not delete the
-     * current buffer, it only overwrites the current values in the buffer.
-     */
-    private void updateSkeletonBuffer() {
-        Iterator<? extends Tree<AffineTransformation, ?>> skeletonIt = skeleton.preOrderWalk();
-        int i = 0;
-        
-        GL15.glBindBuffer(GL43.GL_SHADER_STORAGE_BUFFER, skeletonSSBO);
-        
-        while (skeletonIt.hasNext()) {
-            Tree<AffineTransformation, ?> bone = skeletonIt.next();
-            
-            if (bone.getValue().isDirty()) {
-                int j = i;
-                
-                Tree<Matrix, ?> matrixTree = bone.map((transform) -> transform.getTransformationMatrix(0));
-                Iterator<? extends Tree<Matrix, ?>> matrixIt = matrixTree.preOrderWalk();
-                matrixIt.next();
-                
-                while (matrixIt.hasNext()) {
-                    Tree<Matrix, ?> next = matrixIt.next();
-                    next.setValue(next.getValue().mul(next.getParent().getValue()));
-                    
-                    skeletonIt.next();
-                    ++i;
-                }
-                
-                matrixIt = matrixTree.preOrderWalk();
-                FloatBuffer buf = BufferUtils.createFloatBuffer(bone.size() * 16);
-                while (matrixIt.hasNext())
-                    matrixIt.next().getValue().writeToFloatBuffer(buf, true);
-                buf.flip();
-                
-                GL15.glBufferSubData(GL43.GL_SHADER_STORAGE_BUFFER, j * 16 * Float.BYTES, buf);
-            }
-            
-            ++i;
-        }
-        
-        GL15.glBindBuffer(GL43.GL_SHADER_STORAGE_BUFFER, 0);
-    }
+    // --- METHODS ---
+    
+    
     
     /**
      * Updates the transformation matrices for the given instance in the buffer.
@@ -240,7 +147,7 @@ final class GLRenderable extends Closable {
      * Does not delete the current buffer, it only overwrites the current values
      * in the buffer.
      */
-    private void updateProjViewMatrices() {
+    private void updateInstancePVMMatrices() {
         FloatBuffer buf = BufferUtils.createFloatBuffer(16);
         
         GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, ivbo);
@@ -321,7 +228,7 @@ final class GLRenderable extends Closable {
                 updateInstanceTransform(instanceTransforms[i], i);
         
         if (GraphicsManager.getStatus(GraphicsManager.STATUS_MATRICES_CHANGED))
-            updateProjViewMatrices();
+            updateInstancePVMMatrices();
     }
 
     /**
@@ -339,28 +246,24 @@ final class GLRenderable extends Closable {
                 mesh = null;
             
             else {
-                if (skeleton != null && !checkSkeleton()) {
+                // check the skeleton, removing it if not valid
+                if (skeleton != null && skeleton.getExpectedNumMeshVertices() != mesh.getNumVertices())
                     skeleton = null;
-                    weights = null;
-                    closeSkeletonSSBO();
-                }
                 
+                // bind the skeleton (or an empty skeleton)
                 if (skeleton != null) {
-                    updateSkeletonBuffer();
-                    program.bindShaderStorage(skeletonSSBO, GraphicsManager.SHADER_UNIFORM_SKELETON_TRANSFORMS_NAME);
-                    program.bindShaderStorage(weightSSBO, GraphicsManager.SHADER_UNIFORM_SKELETON_WEIGHTS_NAME);
-                } else {
-                    program.bindShaderStorage(GraphicsManager.SHADER_STORAGE_BUFFER_OBJECT_ZERO, GraphicsManager.SHADER_UNIFORM_SKELETON_TRANSFORMS_NAME);
-                    program.bindShaderStorage(GraphicsManager.SHADER_STORAGE_BUFFER_OBJECT_ZERO, GraphicsManager.SHADER_UNIFORM_SKELETON_WEIGHTS_NAME);
-                }
+                    skeleton.updateTransforms();
+                    skeleton.bind(program);
+                } else
+                    GLSkeleton.bindEmpty(program);
                 
                 // update or rebuffer the instance buffer
                 if (instanceNumDirty) rebufferInstanceBuffer();
                 else                  updateInstanceBuffer();
                 
                 // bind textures, skipping any null or closed textures
-                // if unit 0 would thus have no texture (or if the texture doesn't
-                // match the program), bind the default texture
+                // if unit 0 would have no texture (or if the texture doesn't
+                // match the program), bind the default texture for that unit
                 for (int i = 0; i < textures.length; ++i) {
                     if (textures[i] == null ||
                         textures[i].isClosed() ||
@@ -378,14 +281,14 @@ final class GLRenderable extends Closable {
                     if (textures[i] != null) textures[i].bind();
                 }
 
+                // perform rendering using the mesh
                 boolean e = mesh.render(ivbo, instanceTransforms.length);
 
+                // unbind everything
                 for (GLTexture texture : textures)
                     if (texture != null) texture.unbind();
 
-                program.bindShaderStorage(0, GraphicsManager.SHADER_UNIFORM_SKELETON_TRANSFORMS_NAME);
-                program.bindShaderStorage(0, GraphicsManager.SHADER_UNIFORM_SKELETON_WEIGHTS_NAME);
-                
+                GLSkeleton.unbind(program);
                 return e;
             }
         }
@@ -397,13 +300,6 @@ final class GLRenderable extends Closable {
     protected boolean doClose() {
         GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, 0);
         GL15.glDeleteBuffers(ivbo);
-        closeSkeletonSSBO();
         return true;
-    }
-    
-    private void closeSkeletonSSBO() {
-        GL15.glBindBuffer(GL43.GL_SHADER_STORAGE_BUFFER, 0);
-        GL15.glDeleteBuffers(skeletonSSBO);
-        GL15.glDeleteBuffers(weightSSBO);
     }
 }
