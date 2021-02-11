@@ -538,11 +538,8 @@ final class GLMesh extends GLObject {
      * buffers. If the mesh currently has invalid parameters, it reverts back to the
      * last valid set of parameters.<p>
      * 
-     * The animation callback determines the buffering behaviour - if it is
-     * {@code null}, then the mesh is buffered and updated normally. If it is not
-     * {@code null}, then the callback is used when writing the vertex attributes to
-     * a buffer. Regardless of whether the animation is paused or not, a
-     * non-{@code null} animation callback will cause the mesh to rebuffer.
+     * Note that any require uniforms, textures, buffers, etc. must be bound before
+     * calling this method.
      * 
      * @param ivbo the instance vertex buffer object
      * @param instances the number of instances

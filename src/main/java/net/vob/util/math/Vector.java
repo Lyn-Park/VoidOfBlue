@@ -131,7 +131,7 @@ public class Vector extends Matrix {
         if (mat.columns != 1)
             throw new IllegalArgumentException(LocaleUtils.format("Vector.NonVectorInput", mat.columns));
         if (rows != mat.rows)
-            throw new IllegalArgumentException(LocaleUtils.format("Matrix.IllegalRowNumber", mat.rows, rows));
+            throw new IllegalArgumentException(LocaleUtils.format("global.Math.IllegalMatrixRowNumber", rows, mat.rows));
         
         return IntStream.range(0, rows).mapToDouble((i) -> elements[i] * mat.elements[i]).sum();
     }

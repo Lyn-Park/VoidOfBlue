@@ -134,12 +134,14 @@ final class GraphicsManager {
     /** The total stride of a mesh instance, in bytes. */
     static final int INSTANCE_STRIDE = INSTANCE_PROJECTION_VIEW_MODEL_MATRIX_OFFSET + (16 * Float.BYTES);
     
+    /** Status flag for if the graphical thread has completed initialization. */
+    static final int STATUS_INITIALIZED = 1;
     /** Status flag for if the projection and view matrices, as well as the window options, have changed. */
-    static final int STATUS_MATRICES_CHANGED = 1;
+    static final int STATUS_MATRICES_CHANGED = 2;
     /** Status flag for whether to render the skybox. */
-    static final int STATUS_DO_SKYBOX_RENDER = 2;
+    static final int STATUS_DO_SKYBOX_RENDER = 4;
     /** Status flag for whether to render the UI. */
-    static final int STATUS_DO_UI_RENDER = 4;
+    static final int STATUS_DO_UI_RENDER = 8;
     
     // --- VARIABLES ---
     
@@ -163,7 +165,6 @@ final class GraphicsManager {
      */
     static AffineTransformation VIEW_TRANSFORM = AffineTransformationImpl.IDENTITY;
     static Matrix VIEW_MATRIX = Matrix.identity(4);
-    static Matrix PROJ_MATRIX = Matrix.identity(4);
     static Matrix PROJ_VIEW_MATRIX = Matrix.identity(4);
     
     /**
@@ -190,6 +191,7 @@ final class GraphicsManager {
     static GLShader SELECTED_SHADER = null;
     static GLShaderProgram SELECTED_PROGRAM = null;
     static GLTexture SELECTED_TEXTURE = null;
+    static GLSkeleton SELECTED_SKELETON = null;
     
     // --- PACKAGE PRIVATE FUNCTIONS ---
     
@@ -423,6 +425,7 @@ final class GraphicsManager {
             GL15.glBufferData(GL43.GL_SHADER_STORAGE_BUFFER, new int[]{ 0 }, GL15.GL_STATIC_DRAW);
             GL15.glBindBuffer(GL43.GL_SHADER_STORAGE_BUFFER, 0);
             
+            setStatus(STATUS_INITIALIZED);
             LOOP_TIMER = Instant.now();
 
             LOG.log(Level.FINEST, "global.Status.Init.End", "Graphics thread");
@@ -458,14 +461,14 @@ final class GraphicsManager {
             
             // If the view transform or projection settings are dirty, reset the
             // view and projection matrices
-            if (VIEW_TRANSFORM.isDirty() || GraphicsEngine.windowOptions.isDirty()) {
-                PROJ_MATRIX = GraphicsEngine.windowOptions.flushAndGetProjectionMatrix();
+            if (VIEW_TRANSFORM.isDirty() || GraphicsEngine.isProjectionDirty()) {
+                GraphicsEngine.flushProjectionMatrix();
                 VIEW_MATRIX = VIEW_TRANSFORM.getTransformationMatrix(AffineTransformation.FLAG_IGNORE_SCALING |
                                                                      AffineTransformation.FLAG_INVERT_TRANSLATION |
                                                                      AffineTransformation.FLAG_INVERT_ROTATION |
                                                                      AffineTransformation.FLAG_INVERT_TRANSFORM_ORDER);
 
-                PROJ_VIEW_MATRIX = PROJ_MATRIX.mul(VIEW_MATRIX);
+                PROJ_VIEW_MATRIX = GraphicsEngine.PROJ_MATRIX.mul(VIEW_MATRIX);
                 setStatus(STATUS_MATRICES_CHANGED);
             }
             
@@ -518,7 +521,7 @@ final class GraphicsManager {
                 doRenderWithProgram(GLShaderProgram.DEFAULT_UI, UI_RENDERABLES);
             }
             
-            // Swap the buffers, and log any errors that occurred
+            // Swap the buffers
             GraphicsEngine.swapBuffers();
             clearStatus(STATUS_MATRICES_CHANGED);
             
@@ -536,16 +539,20 @@ final class GraphicsManager {
             GLShader.REGISTRY.forEach(GLObject::close);
             GLShaderProgram.REGISTRY.forEach(GLObject::close);
             GLTexture.REGISTRY.forEach(GLObject::close);
+            GLSkeleton.REGISTRY.forEach(GLObject::close);
 
             GLMesh.REGISTRY.clear();
             GLShader.REGISTRY.clear();
             GLShaderProgram.REGISTRY.clear();
             GLTexture.REGISTRY.clear();
+            GLSkeleton.REGISTRY.clear();
 
             SKYBOX.close();
             
             GL15.glBindBuffer(GL43.GL_SHADER_STORAGE_BUFFER, 0);
             GL15.glDeleteBuffers(SHADER_STORAGE_BUFFER_OBJECT_ZERO);
+            
+            clearStatus(STATUS_INITIALIZED);
             
         } catch (Throwable t) {
             LOG.log(Level.SEVERE, LocaleUtils.format("global.Status.Close.Failed", "Graphics thread"), t);
@@ -560,12 +567,12 @@ final class GraphicsManager {
         // 'Global' uniform values, these do not change over the course of the use
         // of this program
         if (getStatus(STATUS_MATRICES_CHANGED)) {
-            program.uniform3ui(GraphicsEngine.windowOptions.getWindowWidth(),
-                               GraphicsEngine.windowOptions.getWindowHeight(),
-                               GraphicsEngine.windowOptions.getWindowDepth(),
+            program.uniform3ui(GraphicsEngine.getWindowWidth(),
+                               GraphicsEngine.getWindowHeight(),
+                               GraphicsEngine.getWindowDepth(),
                                SHADER_UNIFORM_WINDOW_SIZE_NAME);
 
-            program.uniformMatrix4(PROJ_MATRIX, SHADER_UNIFORM_PROJECTION_MATRIX_NAME);
+            program.uniformMatrix4(GraphicsEngine.PROJ_MATRIX, SHADER_UNIFORM_PROJECTION_MATRIX_NAME);
             program.uniformMatrix4(VIEW_MATRIX, SHADER_UNIFORM_VIEW_MATRIX_NAME);
         }
         

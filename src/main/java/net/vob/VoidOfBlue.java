@@ -11,7 +11,6 @@ import java.util.logging.LogManager;
 import java.util.logging.Logger;
 import net.vob.mods.ModManager;
 import net.vob.core.graphics.GraphicsEngine;
-import net.vob.core.graphics.WindowOptions;
 import net.vob.util.ArrayTree;
 import net.vob.util.logging.Level;
 import net.vob.util.logging.LocaleUtils;
@@ -105,7 +104,8 @@ public final class VoidOfBlue {
         LOG.log(Level.INFO, "VoidOfBlue.begin.Start");
         startTime = Instant.now();
         
-        GraphicsEngine.init(new WindowOptions(800, 640, 100, 80.0f, 0.1f, 100f), 10);
+        GraphicsEngine.init(GraphicsEngine.VALUE_DONT_CARE, GraphicsEngine.VALUE_DONT_CARE,
+                            800, 640, 100, 80.0f, 0.1f, 100f, false, 10);
         ModManager.loadModFiles();
     }
     
@@ -155,9 +155,10 @@ public final class VoidOfBlue {
             GraphicsEngine.msgRenderableAttachMesh();
             GraphicsEngine.msgRenderableAttachTexture();
             GraphicsEngine.msgShaderProgramAssignRenderable();
+            GraphicsEngine.msgSkeletonNew(skeleton, weights);
             
             GraphicsEngine.msgRenderableSetInstanceTransform(t2, 0);
-            GraphicsEngine.msgRenderableAttachSkeleton(skeleton, weights);
+            GraphicsEngine.msgRenderableAttachSkeleton();
             
             t1.setTranslation(new Vector3(1, 0, 0));
             t2.setTranslation(new Vector3(-1, 0, 0));
@@ -174,8 +175,8 @@ public final class VoidOfBlue {
             
             double t = getCurrentTime() / 3d;
             
-            double s = Math.sin(t * Math.PI) * 1.5d;
-            double c = Math.cos(t * Math.PI) * 1.5d;
+            double s = Math.sin(t * Math.PI) * 0.75;
+            double c = Math.cos(t * Math.PI) * 0.75;
             
             camera.setTranslation(Vector3.FORWARD.rotate(Quaternion.rotationQuaternion(Vector3.UP, t)).mul(3));
             camera.setRotation(Quaternion.rotationQuaternion(camera.getTranslation().mul(-1), Vector3.ZERO, Vector3.UP));

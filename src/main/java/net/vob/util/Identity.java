@@ -32,7 +32,9 @@ import net.vob.util.logging.LocaleUtils;
  * the folder names {@code "asset", "tile"} will return a file pointing to
  * {@code resources/main/asset/tile/data.json}.<p>
  * 
- * Note that the superid and id strings are converted to lowercase.
+ * <b>Note</b>: the superid and id strings are converted to lowercase prior to
+ * being stored. This means <i>a resource file must have a strictly lowercase
+ * name</i> in order to allow an identity to reference it.
  * 
  * @author Lyn-Park
  */

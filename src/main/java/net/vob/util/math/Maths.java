@@ -1,6 +1,9 @@
 package net.vob.util.math;
 
+import com.google.common.collect.Streams;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.function.BinaryOperator;
 import net.vob.util.logging.LocaleUtils;
 
 /**
@@ -576,6 +579,164 @@ public final class Maths {
                 mat.setElement(r, c, vecs[c].getElement(r));
                 
         return mat;
+    }
+    
+    /**
+     * Reduces the given matrix along its rows. This is equivalent to calling
+     * {@link java.util.stream.Stream#reduce(Object, BinaryOperator) reduce(0, accumulator)}
+     * on a set of streams containing every row in the matrix, and collecting the outputs in
+     * the appropriate elements of the returned vector.<p>
+     * 
+     * In other words, for any integer {@code r}, the {@code r}-th element of the returned
+     * vector is given by:
+     * <blockquote><pre>
+     *     {@code double result = 0;
+     *      for (int c = 0; c < mat.getNumColumns(); ++c) {
+     *          result = accumulator.apply(result, mat.getElement(r, c));
+     *      }
+     *      return result;}</pre></blockquote>
+     * Note that the returned vector is guaranteed to contain the same number of elements as
+     * rows in the matrix.
+     * 
+     * @param mat the matrix to reduce row-wise
+     * @param accumulator the accumulator to use for the reduction
+     * @return the vector containing the reduced rows of the matrix
+     */
+    public static Vector rowWiseReduction(Matrix mat, BinaryOperator<Double> accumulator) {
+        Vector vec = new Vector(mat.getNumRows());
+        
+        for (int r = 0; r < mat.getNumRows(); ++r) {
+            double val = 0;
+            
+            for (int c = 0; c < mat.getNumColumns(); ++c)
+                val = accumulator.apply(val, mat.getElement(r, c));
+            
+            vec.setElement(r, val);
+        }
+        
+        return vec;
+    }
+    
+    /**
+     * Reduces the given matrix along its rows. This is equivalent to calling
+     * {@link java.util.stream.Stream#reduce(Object, BinaryOperator) reduce(default, accumulator)}
+     * on a set of streams containing every row in the matrix, and collecting the outputs in
+     * the appropriate elements of the returned vector. The {@code default} parameter is
+     * sourced from the appropriate element in the given vector of default values.<p>
+     * 
+     * In other words, for any integer {@code r}, the {@code r}-th element of the returned
+     * vector is given by:
+     * <blockquote><pre>
+     *     {@code double result = defaults.getElement(r);
+     *      for (int c = 0; c < mat.getNumColumns(); ++c) {
+     *          result = accumulator.apply(result, mat.getElement(r, c));
+     *      }
+     *      return result;}</pre></blockquote>
+     * Note that the returned vector is guaranteed to contain the same number of elements as
+     * rows in the matrix.
+     * 
+     * @param mat the matrix to reduce row-wise
+     * @param defaults the vector of defaults to use for the reduction
+     * @param accumulator the accumulator to use for the reduction
+     * @return the vector containing the reduced rows of the matrix
+     * @throws IllegalArgumentException if the size of {@code defaults} does not match the
+     * number of rows in {@code mat}
+     */
+    public static Vector rowWiseReduction(Matrix mat, Vector defaults, BinaryOperator<Double> accumulator) {
+        if (defaults.getSize() != mat.getNumRows())
+            throw new IllegalArgumentException(LocaleUtils.format("global.Math.IllegalMatrixRowNumber", mat.getNumRows(), defaults.getSize()));
+        
+        Vector vec = new Vector(mat.getNumRows());
+        
+        for (int r = 0; r < mat.getNumRows(); ++r) {
+            double val = defaults.getElement(r);
+            
+            for (int c = 0; c < mat.getNumColumns(); ++c)
+                val = accumulator.apply(val, mat.getElement(r, c));
+            
+            vec.setElement(r, val);
+        }
+        
+        return vec;
+    }
+    
+    /**
+     * Reduces the given matrix along its columns. This is equivalent to calling
+     * {@link java.util.stream.Stream#reduce(Object, BinaryOperator) reduce(0, accumulator)}
+     * on a set of streams containing every column in the matrix, and collecting the outputs
+     * in the appropriate elements of the returned vector.<p>
+     * 
+     * In other words, for any integer {@code c}, the {@code c}-th element of the returned
+     * vector is given by:
+     * <blockquote><pre>
+     *     {@code double result = 0;
+     *      for (int r = 0; r < mat.getNumRows(); ++r) {
+     *          result = accumulator.apply(result, mat.getElement(r, c));
+     *      }
+     *      return result;}</pre></blockquote>
+     * Note that the returned vector is guaranteed to contain the same number of elements as
+     * columns in the matrix.
+     * 
+     * @param mat the matrix to reduce column-wise
+     * @param accumulator the accumulator to use for the reduction
+     * @return the vector containing the reduced columns of the matrix
+     */
+    public static Vector columnWiseReduction(Matrix mat, BinaryOperator<Double> accumulator) {
+        Vector vec = new Vector(mat.getNumColumns());
+        
+        for (int c = 0; c < mat.getNumColumns(); ++c) {
+            double val = 0;
+            
+            for (int r = 0; r < mat.getNumRows(); ++r)
+                val = accumulator.apply(val, mat.getElement(r, c));
+            
+            vec.setElement(c, val);
+        }
+        
+        return vec;
+    }
+    
+    /**
+     * Reduces the given matrix along its columns. This is equivalent to calling
+     * {@link java.util.stream.Stream#reduce(Object, BinaryOperator) reduce(default, accumulator)}
+     * on a set of streams containing every column in the matrix, and collecting the outputs
+     * in the appropriate elements of the returned vector. The {@code default} parameter is
+     * sourced from the appropriate element in the given vector of default values.<p>
+     * 
+     * In other words, for any integer {@code c}, the {@code c}-th element of the returned
+     * vector is given by:
+     * <blockquote><pre>
+     *     {@code double result = defaults.getElement(c);
+     *      for (int r = 0; r < mat.getNumRows(); ++r) {
+     *          result = accumulator.apply(result, mat.getElement(r, c));
+     *      }
+     *      return result;}</pre></blockquote>
+     * Note that the returned vector is guaranteed to contain the same number of elements as
+     * columns in the matrix.
+     * 
+     * @param mat the matrix to reduce column-wise
+     * @param defaults the vector of defaults to use for the reduction
+     * @param accumulator the accumulator to use for the reduction
+     * @return the vector containing the reduced columns of the matrix
+     * @throws IllegalArgumentException if the size of {@code defaults} does not match the
+     * number of columns in {@code mat}
+     */
+    public static Vector columnWiseReduction(Matrix mat, Vector defaults, BinaryOperator<Double> accumulator) {
+        if (defaults.getSize() != mat.getNumColumns())
+            throw new IllegalArgumentException(LocaleUtils.format("global.Math.IllegalMatrixColumnNumber", mat.getNumColumns(), defaults.getSize()));
+        
+        Vector vec = new Vector(mat.getNumColumns());
+        
+        for (int c = 0; c < mat.getNumColumns(); ++c) {
+            double val = defaults.getElement(c);
+            
+            for (int r = 0; r < mat.getNumRows(); ++r)
+                val = accumulator.apply(val, mat.getElement(r, c));
+            
+            vec.setElement(c, val);
+        }
+        
+        return vec;
     }
     
     /**
